@@ -134,12 +134,4 @@ Finalize UI integration (if applicable) and ensure all APIs are functional and d
 
 ---
 
-## 🧠 Notes for Contributors
-- Always **create a branch** or **fork** before making edits.  
-- Submit changes via **Pull Request (PR)** for approval.  
-- Keep documentation updated for each milestone.
 
----
-
-### 📎 Example Repository Link Format (for submission)
-> https://github.com/leader-username/itcc14-api-project-stockadoodle
