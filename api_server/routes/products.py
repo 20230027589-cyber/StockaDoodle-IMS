@@ -1,27 +1,15 @@
 from flask import Blueprint, request, jsonify
-from api_server.app import db
+from extensions import db
 from models.product import Product
 from models.category import Category
-import base64
+from utils import parse_date, get_image_blob, extract_int
 
 bp = Blueprint('products', __name__)
 
-def validate_product (data, partial = False):
-    errors = []
-    
-    if not partial or 'name' in data:
-        if not data.get('name'): errors.append("Product name is required")
-        if data.get('name') and len(data['name']) > 120: errors.append("Product name too long")
-    
-    if not partial or 'price' in data:
-        try:
-            float(data.get('price', 0))
-        except (ValueError, TypeError):
-            errors.append("Price must be a number")
-    return errors
-
-# Retrieving all products
-@bp.route('', method = ['GET'])
+# ----------------------------------------------------------------------
+# GET /api/v1/products                → list all products
+# ----------------------------------------------------------------------
+@bp.route('', methods = ['GET'])
 def list_product():
     search = request.args.get('search')
     category_id = request.args.get('category_id')
@@ -38,95 +26,140 @@ def list_product():
         p.to_dict(include_image) for p in products
     ])
     
-    
-# Retrieving a product based on ID 
-@bp.route('/int:id', methods=[('GET')])
+# ----------------------------------------------------------------------
+# GET /api/v1/products/<id>           → retrieving a product based on ID 
+# ----------------------------------------------------------------------    
+@bp.route('/<int:id>', methods=['GET'])
 def get_product(id):
     product = Product.query.get_or_404(id)
-    include_image = request.get.args('include_image') == 'true'
+    include_image = request.args.get('include_image') == 'true'
     return jsonify(product.to_dict(include_image))
 
-# Create a product
-@bp.route('int:id', methods=(['POST']))
+# ----------------------------------------------------------------------
+# POST /api/v1/products               → create new product
+# ----------------------------------------------------------------------
+@bp.route('', methods=['POST'])
 def create_product():
-    data = request.get_json or {}
-    errors = validate_product(data)
-    if errors:
-        return jsonify ({"Errors": errors}), 400
-    
-    if data.get('category_id') and not Category.query.get(data['category_id']):
-        return jsonify ({"Error": "Invalid Category ID"}), 400
-    
-    image_blob = None
-    if data.get('image_base64'):
-        try:
-            image_blob = base64.b64decode(data['image_base64'])
-        except:
-            return jsonify ({"Error": "Invalid Image"}), 400
-        
+    is_form = request.content_type and 'multipart/form-data' in request.content_type
+    data = request.form.to_dict() if is_form else (request.get_json() or {})
+
+    if not data.get('name'):
+        return jsonify({"errors": ["Product name is required"]}), 400
+
+    price = extract_int(data.get('price'))
+    if price is None:
+        return jsonify({"errors": ["Price must be a number"]}), 400
+
+    category_id = None
+    if data.get('category_id'):
+        category_id = extract_int(data['category_id'])
+        if category_id and not Category.query.get(category_id):
+            return jsonify({"errors": ["Invalid category ID"]}), 400
+
+    image_blob = get_image_blob()
+
     product = Product(
         name=data['name'],
         brand=data.get('brand'),
-        price=data['price'],
-        category_id=data.get('category_id'),
-        stock_level=data.get('stock_level', 0),
-        min_stock_level=data.get('min_stock_level', 10),
-        expiration_date=data.get('expiration_date'),
+        price=price,
+        category_id=category_id,
+        stock_level=extract_int(data.get('stock_level'), 0),
+        min_stock_level=extract_int(data.get('min_stock_level'), 10),
+        expiration_date=parse_date(data.get('expiration_date')),
         image_blob=image_blob
     )
-    
+
     db.session.add(product)
     db.session.commit()
     return jsonify(product.to_dict()), 201
 
 
-# Replace a product
-@bp.route('/<int:id>', methods=['PUT'])
-def update_product(id):
-    product = Product.query.get_or_404(id)
-    data = request.get_json() or {}
-    errors = validate_product(data, partial=True)
-    if errors: return jsonify({"errors": errors}), 400
-    
-    for field in ['name', 'brand', 'price', 'category_id', 'stock_level', 'min_stock_level', 'expiration_date']:
-        if field in data:
-            setattr(product, field, data[field])
-    
-    if 'image_base64' in data:
-        product.image_blob = base64.b64decode(data['image_base64']) if data['image_base64'] else None
-    
+# ----------------------------------------------------------------------
+# PUT /api/v1/products/<int:id>       → Replace a product
+# ----------------------------------------------------------------------
+@bp.route('/<int:product_id>', methods=['PUT'])
+def replace_product(product_id):
+    product = Product.query.get_or_404(product_id)
+
+    is_form = request.content_type and 'multipart/form-data' in request.content_type
+    data = request.form.to_dict() if is_form else (request.get_json() or {})
+
+    if 'name' not in data:
+        return jsonify({"errors": ["Product name is required for PUT"]}), 400
+
+    price = extract_int(data.get('price'))
+    if price is None:
+        return jsonify({"errors": ["Price must be a number"]}), 400
+
+    category_id = None
+    if 'category_id' in data:
+        category_id = extract_int(data['category_id'])
+        if category_id and not Category.query.get(category_id):
+            return jsonify({"errors": ["Invalid category ID"]}), 400
+
+    product.name = data['name']
+    product.brand = data.get('brand')
+    product.price = price
+    product.category_id = category_id
+    product.stock_level = extract_int(data.get('stock_level'), product.stock_level)
+    product.min_stock_level = extract_int(data.get('min_stock_level'), product.min_stock_level)
+    product.expiration_date = parse_date(data.get('expiration_date')) or product.expiration_date
+
+    # Image handling
+    new_image = get_image_blob()
+    if new_image is not None:
+        product.image_blob = new_image
+
     db.session.commit()
     return jsonify(product.to_dict())
 
-    
-# Edit product details
+# ----------------------------------------------------------------------
+# PATCH /api/v1/products/<int:id>     → edit product details
+# ----------------------------------------------------------------------   
 @bp.route('/<int:id>', methods=['PATCH'])
 def patch_product(id):
     product = Product.query.get_or_404(id)
-    data = request.get_json() or {}
+    is_form = request.content_type and 'multipart/form-data' in request.content_type
+    data = request.form.to_dict() if is_form else (request.get_json() or {})
 
-    # Validate only fields being patched
-    errors = validate_product(data, partial=True)
-    if errors:
-        return jsonify({"errors": errors}), 400
+    if 'name' in data and not data['name']:
+        return jsonify({"errors": ["Product name cannot be empty"]}), 400
 
-    # Update only supplied fields
-    for field in ['name', 'brand', 'price', 'category_id', 'stock_level', 'min_stock_level', 'expiration_date']:
+    if 'price' in data:
+        price = extract_int(data['price'])
+        if price is None:
+            return jsonify({"errors": ["Price must be a number"]}), 400
+        product.price = price
+
+    if 'category_id' in data:
+        cat_id = extract_int(data['category_id'])
+        if cat_id and not Category.query.get(cat_id):
+            return jsonify({"errors": ["Invalid category ID"]}), 400
+        product.category_id = cat_id
+
+    # Simple field updates
+    for field in ('name', 'brand', 'stock_level', 'min_stock_level'):
         if field in data:
             setattr(product, field, data[field])
 
-    # Handle image
-    if "image_base64" in data:
-        product.image_blob = base64.b64decode(data['image_base64']) if data['image_base64'] else None
+    if 'expiration_date' in data:
+        product.expiration_date = parse_date(data['expiration_date'])
 
+    # Image update (replace only if sent)
+    new_image = get_image_blob()
+    if new_image is not None:
+        product.image_blob = new_image
+        
     db.session.commit()
     return jsonify(product.to_dict())
         
 
-# Delete a product
+# ----------------------------------------------------------------------
+# DELETE /api/v1/products/<int:id>    → delete product
+# ----------------------------------------------------------------------
 @bp.route('/<int:id>', methods=['DELETE'])
 def delete_product(id):
     product = Product.query.get_or_404(id)
     db.session.delete(product)
     db.session.commit()
-    return jsonify({"message": "Product deleted"}), 200
+    return jsonify({"message": "Product deleted successfully"}), 200
