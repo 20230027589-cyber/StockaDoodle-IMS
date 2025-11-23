@@ -18,7 +18,7 @@ class Product(db.Model):
 
     # link to a category
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
-
+    
     # lowest allowed stock before warning
     min_stock_level = db.Column(db.Integer, default=10)
 
@@ -47,11 +47,11 @@ class Product(db.Model):
             "name": self.name,
             "brand": self.brand or "",
             "price": self.price,
-            "category_id": self.category_id,
+            "category": self.category.name if self.category else None,
             "stock_level": self.stock_level,
             "min_stock_level": self.min_stock_level,
             "details": self.details or "",
-            "has_image": self.product_image is not None,
+            "has_image": bool(self.product_image)
         }
 
         if include_image and self.product_image:

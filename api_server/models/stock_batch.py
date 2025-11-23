@@ -21,6 +21,9 @@ class StockBatch(db.Model):
 
     # optional: who added this stock
     added_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
+    # reason for adding/removing stock
+    reason = db.Column(db.String(255), nullable=False)
 
     def to_dict(self):
         return {
@@ -29,5 +32,6 @@ class StockBatch(db.Model):
             "quantity": self.quantity,
             "expiration_date": self.expiration_date.isoformat() if self.expiration_date else None,
             "added_at": self.added_at.isoformat(),
-            "added_by": self.added_by
+            "added_by": self.added_by_user.full_name if self.added_by_user else None,
+            "reason": self.reason
         }
