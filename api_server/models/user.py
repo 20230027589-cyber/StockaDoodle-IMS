@@ -16,6 +16,9 @@ class User(db.Model):
 
     # staff/admin/etc
     role = db.Column(db.String(50), default="staff")
+    
+    # email address
+    email = db.Column(db.String(255), unique=True)
 
     # hashed password only
     password_hash = db.Column(db.String(255), nullable=False)
@@ -40,6 +43,7 @@ class User(db.Model):
             "full_name": self.full_name,
             "username": self.username,
             "role": self.role,
+            "email": self.email,
             "has_image": self.user_image is not None
         }
 

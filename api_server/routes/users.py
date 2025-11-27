@@ -58,8 +58,9 @@ def create_user():
     username = data.get('username')
     password = data.get('password')
     full_name = data.get('full_name')
+    email = data.get('email')
     
-    if not username or not password or not full_name:
+    if not username or not password or not full_name or not email:
         return jsonify({"errors": ["username, password, and full_name are required"]}), 400
     
     role = data.get('role', 'staff')
@@ -73,6 +74,7 @@ def create_user():
             password=password,
             full_name=full_name,
             role=role,
+            email=email,
             user_image=user_image
         )
         
@@ -107,9 +109,10 @@ def replace_user(user_id):
     username = data.get('username')
     full_name = data.get('full_name')
     role = data.get('role')
+    email = data.get('email')
     
     if not username or not full_name or not role:
-        return jsonify({"errors": ["username, full_name, and role are required for PUT"]}), 400
+        return jsonify({"errors": ["username, full_name, role, and email are required for PUT"]}), 400
     
     # Handle image
     user_image = get_image_blob()
@@ -138,6 +141,7 @@ def replace_user(user_id):
 # username: String (optional)
 # full_name: String (optional)
 # role: String (optional)
+# email: String (optional)
 # password: String (optional)
 # user_image: File (optional)
 # ----------------------------------------------------------------------
@@ -222,14 +226,13 @@ def login():
     
     # Check if MFA required (admin/manager roles)
     if user.role in ['admin', 'manager']:
-        # For now, return indication that MFA is needed
-        # In production, would send MFA code via MFAService
         return jsonify({
             "message": "MFA required",
             "mfa_required": True,
             "user_id": user.id,
             "username": user.username,
-            "role": user.role
+            "role": user.role,
+            "email": user.email
         }), 200
     
     # Log successful login
@@ -260,15 +263,29 @@ def send_mfa():
     username = data.get('username')
     email = data.get('email')
     
-    if not username or not email:
-        return jsonify({"errors": ["username and email required"]}), 400
+    if not username:
+        return jsonify({"errors": ["username"]}), 400
+    
+    user = UserManager.get_user_by_username(username)
+    if not user:
+        return jsonify({"errors": ["User not found"]}), 404
     
     try:
         MFAService.send_mfa_code(email, username)
+        
+        # Log activity
+        ActivityLogger.log_api_activity(
+            method='POST',
+            target_entity='auth',
+            user_id=user.id,
+            details=f"MFA code sent to {username}"
+        )
+        
         return jsonify({
             "message": "MFA code sent",
             "expires_in_minutes": MFAService.MFA_CODE_EXPIRY_MINUTES
         }), 200
+        
     except Exception as e:
         return jsonify({"errors": [str(e)]}), 500
 
