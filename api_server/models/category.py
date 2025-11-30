@@ -1,24 +1,23 @@
-from extensions import db
+from mongoengine import StringField
+from .base import BaseDocument
 import base64
 
-class Category(db.Model):
-    __tablename__ = 'categories'
-    
-    # id of the category
-    id = db.Column(db.Integer, primary_key=True)
+class Category(BaseDocument):
+    meta = {
+        'collection': 'categories',
+        'ordering': ['name'],
+        'indexes': ['name']
+        }
     
     # name of the category, must be unique
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = StringField(max_length=100, unique=True, required=True)
     
     # optional description of the category
-    description = db.Column(db.String(255), nullable=True)
+    description = StringField(max_length=255)
     
     # optional image for the category
-    category_image = db.Column(db.LargeBinary, nullable=True)
-    
-    # list of products inside this category
-    products = db.relationship('Product', backref='category', lazy=True)
-    
+    category_image = StringField()
+     
     def to_dict(self, include_image=False):
         data = {
             'id': self.id,
@@ -28,6 +27,6 @@ class Category(db.Model):
         
         if include_image and self.category_image:
             # convert image to base64 string for easy frontend use
-            data['image_base64'] = base64.b64encode(self.category_image).decode('utf-8')
+            data['image_base64'] = self.category_image
         
         return data

@@ -1,33 +1,32 @@
-from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
+from mongoengine import StringField, EmailField
+from .base import BaseDocument
 import base64
 
-class User(db.Model):
-    __tablename__ = 'users'
-
-    # id of the user
-    id = db.Column(db.Integer, primary_key=True)
-
+class User(BaseDocument):
+    meta = {
+        'collection': 'users',
+        'ordering': ['username'],
+        'indexes': ['username', 'email', 'role']
+        }
+    
     # full name for display
-    full_name = db.Column(db.String(120), nullable=False)
+    full_name = StringField(max_length=120, required=True)
 
     # used for login
-    username = db.Column(db.String(120), unique=True, nullable=False)
+    username = StringField(max_length=120, unique=True, required=True)
 
-    # staff/admin/etc
-    role = db.Column(db.String(50), default="staff")
+    # admin/manager/retailer
+    role = StringField(max_length=50, default="retailer")
     
     # email address
-    email = db.Column(db.String(255), unique=True)
+    email = EmailField(max_length=255, unique=True, required=True)
 
     # hashed password only
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = StringField(max_length=255, required=True)
 
     # optional profile picture
-    user_image = db.Column(db.LargeBinary)
-
-    # batches added by this user
-    stock_batches = db.relationship('StockBatch', backref='added_by_user', lazy=True)
+    user_image = StringField()
 
     def set_password(self, password):
         # turn plain password into hashed password
@@ -44,11 +43,11 @@ class User(db.Model):
             "username": self.username,
             "role": self.role,
             "email": self.email,
-            "has_image": self.user_image is not None
+            "has_image": bool(self.user_image)
         }
 
         if include_image and self.user_image:
             # return user image as base64 string
-            data["image_base64"] = base64.b64encode(self.user_image).decode("utf-8")
+            data["image_base64"] = self.user_image
 
         return data
