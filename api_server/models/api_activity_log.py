@@ -1,29 +1,32 @@
-from extensions import db
+from mongoengine import StringField, DateTimeField, ReferenceField
+from .base import BaseDocument
+from .user import User
 from datetime import datetime
 
-class APIActivityLog(db.Model):
-    __tablename__ = "api_activity_logs"
-
-    # id of the api log entry
-    id = db.Column(db.Integer, primary_key=True)
-
+class APIActivityLog(BaseDocument):
+    meta = {
+        'collection': 'api_activity_logs',
+        'ordering': ['-timestamp'],
+        'indexes': ['method', 'target_entity', '-timestamp']
+    }
+    
     # http method like POST or GET
-    method = db.Column(db.String(10), nullable=False)
+    method = StringField(max_length=10, required=True)
 
     # the target entity name like product or user
-    target_entity = db.Column(db.String(50), nullable=False)
+    target_entity = StringField(max_length=50, required=True)
 
     # optional user responsible for the action
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    user = ReferenceField(User, required=False)
 
     # where the action came from
-    source = db.Column(db.String(50), default="API")
+    source = StringField(max_length=50, default="API")
 
     # details saved as text for flexible logging
-    details = db.Column(db.Text)
+    details = StringField()
 
     # when the action happened
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = DateTimeField(default=datetime.utcnow)
 
     def to_dict(self):
         return {
@@ -31,7 +34,8 @@ class APIActivityLog(db.Model):
             "method": self.method,
             "target": self.target_entity,
             "source": self.source,
-            "user_id": self.user_id,
+            "user_id": self.user.id if self.user else None,
+            "user_name": self.user.full_name if self.user else "System",
             "details": self.details,
             "timestamp": self.timestamp.isoformat()
         }

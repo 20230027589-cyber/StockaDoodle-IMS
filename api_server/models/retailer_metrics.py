@@ -1,36 +1,39 @@
-from extensions import db
+from .base import BaseDocument
+from mongoengine import IntField, FloatField, DateField, ReferenceField
+from .user import User
 from datetime import date, datetime, timezone
 
-class RetailerMetrics(db.Model):
-    __tablename__ = 'retailer_metrics'
-
-    # id of the retailer metrics entry
-    id = db.Column(db.Integer, primary_key=True)
+class RetailerMetrics(BaseDocument):
+    meta = {
+        'collection': 'retailer_metrics',
+        'ordering': ['retailer'],
+        'indexes': ['retailer', 'daily_quota', 'total_sales']
+        }
 
     # which retailer this belongs to
-    retailer_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=False)
+    retailer = ReferenceField(User, unique=True, required=True)
 
     # how many days in a row the retailer has met quota
-    current_streak = db.Column(db.Integer, default=0, nullable=False)
+    current_streak = IntField(default=0)
 
     # daily quota
-    daily_quota = db.Column(db.Float, default=0.0, nullable=False)
+    daily_quota = FloatField(default=0.0)
 
     # last date a sale was made
-    last_sale_date = db.Column(db.Date, nullable=True)
+    last_sale_date = DateField()
 
     # today's total sales
-    sales_today = db.Column(db.Float, default=0.0, nullable=False)
+    sales_today = FloatField(default=0.0)
 
     # lifetime sales total
-    total_sales = db.Column(db.Float, default=0.0, nullable=False)
+    total_sales = FloatField(default=0.0)
 
     # lifetime transaction count
-    total_transactions = db.Column(db.Integer, default=0, nullable=False)
+    total_transactions = IntField(default=0)
 
     def to_dict(self):
         return {
-            'retailer_id': self.retailer_id,
+            'retailer_id': self.retailer.id if self.retailer else None,
             'current_streak': self.current_streak,
             'daily_quota': self.daily_quota,
             'last_sale_date': self.last_sale_date.isoformat() if self.last_sale_date else None,

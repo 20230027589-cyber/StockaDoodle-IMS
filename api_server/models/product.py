@@ -1,45 +1,39 @@
-from extensions import db
-import base64
+from .base import BaseDocument
+from mongoengine import StringField, IntField
 
-class Product(db.Model):
-    __tablename__ = 'products'
-
-    # this is the id of the product
-    id = db.Column(db.Integer, primary_key=True)
-
+class Product(BaseDocument):
+    meta = {
+        'collection': 'products',
+        'ordering': ['name'],
+        'indexes': ['category_id', 'price']
+        }
+    
     # name of the product, must be unique
-    name = db.Column(db.String(120), unique=True, nullable=False)
+    name = StringField(max_length=120, unique=True, required=True)
 
     # simple brand text
-    brand = db.Column(db.String(50))
+    brand = StringField(max_length=50)
 
     # price as whole number
-    price = db.Column(db.Integer, nullable=False)
+    price = IntField(required=True)
 
     # link to a category
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'))
+    category_id = IntField(required=True)
     
     # lowest allowed stock before warning
-    min_stock_level = db.Column(db.Integer, default=10)
+    min_stock_level = IntField(default=10)
 
-    # this stores the product picture in bytes
-    product_image = db.Column(db.LargeBinary)
-
+    # this stores the product picture
+    product_image = StringField()
+    
     # longer description of the product, optional
-    details = db.Column(db.String(250), nullable=True)
-
-    # connection to all stock batches
-    stock_batches = db.relationship(
-        'StockBatch',
-        backref='product',
-        lazy=True,
-        cascade='all, delete-orphan'
-    )
+    details = StringField(max_length=250)
 
     @property
     def stock_level(self):
+        from .stock_batch import StockBatch
         # this adds all batch quantities together
-        return sum(batch.quantity for batch in self.stock_batches)
+        return sum((batch.quantity or 0) for batch in StockBatch.objects(product_id=self.id))
 
     def to_dict(self, include_image=False, include_batches=False):
         data = {
@@ -56,10 +50,11 @@ class Product(db.Model):
 
         if include_image and self.product_image:
             # send image as base64 string if needed
-            data["image_base64"] = base64.b64encode(self.product_image).decode("utf-8")
+            data["image_base64"] = self.product_image
 
         if include_batches:
+            from .stock_batch import StockBatch
             # include the list of all stock batches
-            data["batches"] = [b.to_dict() for b in self.stock_batches]
+            data["batches"] = [batch.to_dict() for batch in StockBatch.objects(product_id=self.id)]
 
         return data

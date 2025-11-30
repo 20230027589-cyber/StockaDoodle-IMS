@@ -1,29 +1,32 @@
-from extensions import db
+from .base import BaseDocument
+from mongoengine import IntField, DateField, DateTimeField, StringField, ReferenceField
+from .user import User
 from datetime import datetime
 
-class StockBatch(db.Model):
-    __tablename__ = 'stock_batches'
-
-    # id of this batch
-    id = db.Column(db.Integer, primary_key=True)
+class StockBatch(BaseDocument):
+    meta = {
+        'collection': 'stock_batches',
+        'ordering': ['expiration_date'],
+        'indexes': ['product_id', 'expiration_date']
+        }
 
     # product this batch belongs to
-    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    product_id = IntField(required=True)
 
     # how many items inside this batch
-    quantity = db.Column(db.Integer, nullable=False, default=0)
+    quantity = IntField(required=True, default=0)
 
     # when this batch will expire
-    expiration_date = db.Column(db.Date)
+    expiration_date = DateField()
 
     # when this batch was added
-    added_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    added_at = DateTimeField(default=datetime.utcnow)
 
     # optional: who added this stock
-    added_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    added_by = ReferenceField(User)
     
     # reason for adding/removing stock
-    reason = db.Column(db.String(255), nullable=False)
+    reason = StringField(max_length=255)
 
     def to_dict(self):
         return {
@@ -31,7 +34,7 @@ class StockBatch(db.Model):
             "product_id": self.product_id,
             "quantity": self.quantity,
             "expiration_date": self.expiration_date.isoformat() if self.expiration_date else None,
-            "added_at": self.added_at.isoformat(),
-            "added_by": self.added_by_user.full_name if self.added_by_user else None,
+            "added_at": self.added_at.isoformat() if self.added_at else None,
+            "added_by": self.added_by_user.full_name if self.added_by_user else "Unknown",
             "reason": self.reason
         }
