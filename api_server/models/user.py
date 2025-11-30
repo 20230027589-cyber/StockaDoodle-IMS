@@ -1,6 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
-from mongoengine import StringField, EmailField
+from mongoengine import StringField, EmailField, BooleanField, DateTimeField
 from .base import BaseDocument
+from datetime import datetime, timezone
 import base64
 
 class User(BaseDocument):
@@ -27,6 +28,12 @@ class User(BaseDocument):
 
     # optional profile picture
     user_image = StringField()
+    
+    # status of user (for system access)
+    is_active = BooleanField(default=True)
+    
+    # creation timestamp
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
     def set_password(self, password):
         # turn plain password into hashed password
