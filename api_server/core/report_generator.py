@@ -1,4 +1,3 @@
-from extensions import db
 from models.product import Product
 from models.category import Category
 from models.sale import Sale, SaleItem
@@ -7,8 +6,6 @@ from models.retailer_metrics import RetailerMetrics
 from models.product_log import ProductLog
 from models.stock_batch import StockBatch
 from datetime import datetime, date, timedelta
-from sqlalchemy import func
-
 
 class ReportGenerator:
     """
@@ -35,29 +32,37 @@ class ReportGenerator:
             start_date = date.today() - timedelta(days=30)
         if not end_date:
             end_date = date.today()
-
-        # Query sales with joins
-        sales_query = (
-            db.session.query(
-                Sale.id.label('sale_id'),
-                Sale.created_at,
-                Product.name.label('product_name'),
-                SaleItem.quantity,
-                SaleItem.line_total,
-                User.full_name.label('retailer_name')
-            )
-            .join(SaleItem, Sale.id == SaleItem.sale_id)
-            .join(Product, SaleItem.product_id == Product.id)
-            .join(User, Sale.retailer_id == User.id)
-            .filter(Sale.created_at >= start_date)
-            .filter(Sale.created_at <= end_date)
-            .order_by(Sale.created_at.desc())
-        )
-
-        results = sales_query.all()
+            
+        # Convert to datetime for MongoDB query
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.max.time())
         
-        total_income = sum(r.line_total for r in results)
-        total_quantity = sum(r.quantity for r in results)
+        # Query sales
+        sales = Sale.objects(
+            created_at__gte=start_datetime,
+            created_at__lte=end_datetime
+        ).order_by('-created_at')
+
+        results = []
+        for sale in sales:
+            retailer = User.objects(id=sale.retailer).first()
+            items = SaleItem.objects(sale=sale.id)
+            
+            for item in items:
+                product = Product.objects(id=item.product).first()
+                results.append({
+                    'sale_id': sale.id,
+                    'date': sale.created_at.isoformat(),
+                    'product_name': product.name if product else 'Unknown',
+                    'quantity_sold': item.quantity,
+                    'total_price': item.line_total,
+                    'retailer_name': retailer.full_name if retailer else 'Unknown'
+                })
+
+        total_income = sum(r['total_price'] for r in results)
+        total_quantity = sum(r['quantity_sold'] for r in results)
+        unique_sales = len(set(r['sale_id'] for r in results))
+
 
         return {
             'report_id': 1,
@@ -66,21 +71,11 @@ class ReportGenerator:
                 'start': start_date.isoformat(),
                 'end': end_date.isoformat()
             },
-            'sales': [
-                {
-                    'sale_id': r.sale_id,
-                    'date': r.created_at.isoformat(),
-                    'product_name': r.product_name,
-                    'quantity_sold': r.quantity,
-                    'total_price': r.line_total,
-                    'retailer_name': r.retailer_name
-                }
-                for r in results
-            ],
+            'sales': results,
             'summary': {
                 'total_income': round(total_income, 2),
                 'total_quantity_sold': total_quantity,
-                'total_transactions': len(set(r.sale_id for r in results))
+                'total_transactions': unique_sales
             }
         }
 
@@ -95,21 +90,17 @@ class ReportGenerator:
         Returns:
             dict: Category-wise stock distribution
         """
-        categories = Category.query.all()
+        categories = Category.objects()
         
-        total_stock = sum(
-            sum(batch.quantity for batch in product.stock_batches)
-            for category in categories
-            for product in category.products
-        )
+        # Calculate total stock across all products
+        all_products = Product.objects()
+        total_stock = sum(product.stock_level for product in all_products)
 
         category_data = []
         for category in categories:
-            products_count = len(category.products)
-            category_stock = sum(
-                sum(batch.quantity for batch in product.stock_batches)
-                for product in category.products
-            )
+            products = Product.objects(category=category.id)
+            products_count = products.count()
+            category_stock = sum(product.stock_level for product in products)
             percentage = (category_stock / total_stock * 100) if total_stock > 0 else 0
 
             category_data.append({
@@ -125,7 +116,7 @@ class ReportGenerator:
             'report_name': 'Category Distribution Report',
             'categories': category_data,
             'summary': {
-                'total_categories': len(categories),
+                'total_categories': categories.count(),
                 'total_stock': total_stock
             }
         }
@@ -141,11 +132,11 @@ class ReportGenerator:
         Returns:
             dict: All retailers with performance metrics
         """
-        retailers = User.query.filter(User.role.in_(['retailer', 'staff'])).all()
+        retailers = User.objects(role__in=['retailer', 'staff'])
         
         performance_data = []
         for retailer in retailers:
-            metrics = RetailerMetrics.query.filter_by(retailer_id=retailer.id).first()
+            metrics = RetailerMetrics.objects(retailer=retailer.id).first()
             
             if metrics:
                 quota_progress = (metrics.sales_today / metrics.daily_quota * 100) if metrics.daily_quota > 0 else 0
@@ -168,7 +159,7 @@ class ReportGenerator:
             'report_name': 'Retailer Performance Report',
             'retailers': performance_data,
             'summary': {
-                'total_retailers': len(retailers),
+                'total_retailers': retailers.count(),
                 'active_today': len([r for r in performance_data if r['current_sales'] > 0])
             }
         }
@@ -187,7 +178,7 @@ class ReportGenerator:
         Returns:
             dict: Products needing attention
         """
-        products = Product.query.all()
+        products = Product.objects()
         alerts = []
 
         cutoff_date = date.today() + timedelta(days=days_ahead)
@@ -204,14 +195,17 @@ class ReportGenerator:
                     alert_status.append("LOW_STOCK")
 
             # Expiration check
-            expiring_batches = [
-                batch for batch in product.stock_batches
-                if batch.expiration_date and batch.expiration_date <= cutoff_date and batch.quantity > 0
-            ]
+            expiring_batches = StockBatch.objects(
+                product=product.id,
+                expiration_date__lte=cutoff_date,
+                expiration_date__ne=None,
+                quantity__gt=0
+            )
 
-            if expiring_batches:
+
+            if expiring_batches.count() > 0:
                 alert_status.append("EXPIRING_SOON")
-                earliest_expiry = min(b.expiration_date for b in expiring_batches)
+                earliest_expiry = min(batch.expiration_date for batch in expiring_batches)
             else:
                 earliest_expiry = None
 
@@ -256,27 +250,33 @@ class ReportGenerator:
             start_date = date.today() - timedelta(days=30)
         if not end_date:
             end_date = date.today()
+            
+        start_datetime = datetime.combine(start_date, datetime.min.time())
+        end_datetime = datetime.combine(end_date, datetime.max.time())
 
-        # Query logs for manager/admin actions
-        logs_query = (
-            db.session.query(
-                ProductLog.id.label('log_id'),
-                Product.name.label('product_name'),
-                ProductLog.action_type,
-                User.id.label('manager_id'),
-                User.full_name.label('manager_name'),
-                ProductLog.log_time,
-                ProductLog.notes
-            )
-            .join(Product, ProductLog.product_id == Product.id)
-            .join(User, ProductLog.user_id == User.id)
-            .filter(User.role.in_(['admin', 'manager']))
-            .filter(ProductLog.log_time >= start_date)
-            .filter(ProductLog.log_time <= end_date)
-            .order_by(ProductLog.log_time.desc())
-        )
+        # Get all product logs from managers/admins
+        all_logs = ProductLog.objects(
+            log_time__gte=start_datetime,
+            log_time__lte=end_datetime
+        ).order_by('-log_time')
 
-        results = logs_query.all()
+        results = []
+        unique_managers = set()
+        
+        for log in all_logs:
+            user = User.objects(id=log.user).first()
+            if user and user.role in ['admin', 'manager']:
+                product = Product.objects(id=log.product).first()
+                results.append({
+                    'log_id': log.id,
+                    'product_name': product.name if product else 'Unknown',
+                    'action_performed': log.action_type,
+                    'manager_id': user.id,
+                    'manager_name': user.full_name,
+                    'date_time': log.log_time.isoformat(),
+                    'notes': log.notes
+                })
+                unique_managers.add(user.id)
 
         return {
             'report_id': 5,
@@ -285,21 +285,10 @@ class ReportGenerator:
                 'start': start_date.isoformat(),
                 'end': end_date.isoformat()
             },
-            'logs': [
-                {
-                    'log_id': r.log_id,
-                    'product_name': r.product_name,
-                    'action_performed': r.action_type,
-                    'manager_id': r.manager_id,
-                    'manager_name': r.manager_name,
-                    'date_time': r.log_time.isoformat(),
-                    'notes': r.notes
-                }
-                for r in results
-            ],
+            'logs': results,
             'summary': {
                 'total_actions': len(results),
-                'unique_managers': len(set(r.manager_id for r in results))
+                'unique_managers': len(unique_managers)
             }
         }
 
@@ -332,7 +321,7 @@ class ReportGenerator:
         Returns:
             dict: All user accounts with details
         """
-        users = User.query.order_by(User.full_name).all()
+        users = User.objects().order_by('full_name')
 
         return {
             'report_id': 7,
@@ -349,9 +338,9 @@ class ReportGenerator:
                 for user in users
             ],
             'summary': {
-                'total_users': len(users),
-                'admins': len([u for u in users if u.role == 'admin']),
-                'managers': len([u for u in users if u.role == 'manager']),
-                'retailers': len([u for u in users if u.role in ['retailer', 'staff']])
+                'total_users': users.count(),
+                'admins': User.objects(role='admin').count(),
+                'managers': User.objects(role='manager').count(),
+                'retailers': User.objects(role__in=['retailer', 'staff']).count()
             }
         }

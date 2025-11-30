@@ -1,138 +1,135 @@
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, 
-    Image, PageBreak, KeepTogether
+    Image, PageBreak, KeepTogether, HRFlowable
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from datetime import datetime
 import os
 from io import BytesIO
+
+from utils.pdf_styles import(
+    PDFColors, PDFStyles, PDFTableStyles, 
+    PDFLayoutHelpers, PDFBranding
+)
 
 
 class PDFReportGenerator:
     """
     Professional PDF report generator for all 7 StockaDoodle reports
-    with company branding and proper formatting
     """
     
-    # Company branding
-    BRANCH_NAME = "Quezon Branch"
-    COMPANY_NAME = "StockaDoodle Inventory Management System"
-    LOGO_PATH = "desktop_app/assets/icons/stockadoodle-logo.png"
-    
-    # Color scheme
-    PRIMARY_COLOR = colors.HexColor('#6C5CE7')
-    SECONDARY_COLOR = colors.HexColor('#00B894')
-    ACCENT_COLOR = colors.HexColor('#D63031')
-    HEADER_BG = colors.HexColor('#2C3E50')
-    ROW_ALT_BG = colors.HexColor('#ECF0F1')
-    
     def __init__(self):
-        """Initialize PDF generator with custom styles"""
-        self.styles = getSampleStyleSheet()
-        self._create_custom_styles()
+        self.styles = self._init_styles()
+        
+    def _init_styles(self):
+        """Initialize all paragraph styles"""
+        return {
+            'title': PDFStyles.get_title_style(),
+            'subtitle': PDFStyles.get_subtitle_style(),
+            'section': PDFStyles.get_section_header_style(),
+            'body': PDFStyles.get_body_style(),
+            'footer': PDFStyles.get_footer_style(),
+            'metric_label': PDFStyles.get_metric_label_style(),
+            'metric_value': PDFStyles.get_metric_value_style()
+        }
     
-    def _create_custom_styles(self):
-        """Create custom paragraph styles"""
-        # Title style
-        self.styles.add(ParagraphStyle(
-            name='CustomTitle',
-            parent=self.styles['Heading1'],
-            fontSize=24,
-            textColor=self.PRIMARY_COLOR,
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            fontName='Helvetica-Bold'
-        ))
+    def _draw_header_background(self, canvas, doc):
+        """Draw gradient header background (called on each page)"""
+        canvas.saveState()
         
-        # Subtitle style
-        self.styles.add(ParagraphStyle(
-            name='CustomSubtitle',
-            parent=self.styles['Heading2'],
-            fontSize=14,
-            textColor=self.HEADER_BG,
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            fontName='Helvetica'
-        ))
+        # Draw navy to purple gradient background
+        canvas.setFillColor(PDFColors.NAVY_DARK)
+        canvas.rect(0, doc.height + doc.topMargin - 0.5*inch, 
+                   doc.width + doc.leftMargin + doc.rightMargin, 
+                   1*inch, fill=1, stroke=0)
         
-        # Section header
-        self.styles.add(ParagraphStyle(
-            name='SectionHeader',
-            parent=self.styles['Heading2'],
-            fontSize=16,
-            textColor=self.PRIMARY_COLOR,
-            spaceAfter=10,
-            spaceBefore=20,
-            fontName='Helvetica-Bold'
-        ))
+        # Gold accent lines on left and right edges
+        canvas.setStrokeColor(PDFColors.GOLD_ACCENT)
+        canvas.setLineWidth(2)
+        canvas.line(doc.leftMargin - 10, 0, 
+                   doc.leftMargin - 10, doc.height + doc.topMargin)
+        canvas.line(doc.width + doc.leftMargin + 10, 0, 
+                   doc.width + doc.leftMargin + 10, doc.height + doc.topMargin)
         
-        # Footer style
-        self.styles.add(ParagraphStyle(
-            name='Footer',
-            parent=self.styles['Normal'],
-            fontSize=8,
-            textColor=colors.grey,
-            alignment=TA_CENTER
-        ))
+        canvas.restoreState()
     
-    def _add_header(self, elements):
-        """Add company header with logo and branch info"""
-        # Add logo if exists
-        if os.path.exists(self.LOGO_PATH):
+    def _add_professional_header(self, elements):
+        """Add professional header with logo and company branding"""
+        # Add company logo
+        logo_path = PDFBranding.LOGO_PATH
+        if not os.path.exists(logo_path):
+            logo_path = PDFBranding.LOGO_FALLBACK_PATH
+        
+        if os.path.exists(logo_path):
             try:
-                logo = Image(self.LOGO_PATH, width=1.5*inch, height=1.5*inch)
+                logo = Image(logo_path, width=2*inch, height=2*inch)
                 logo.hAlign = 'CENTER'
                 elements.append(logo)
-                elements.append(Spacer(1, 0.2*inch))
-            except:
-                pass
+                elements.append(PDFLayoutHelpers.create_spacer(0.15))
+            except Exception as e:
+                print(f"Logo loading failed: {e}")
         
         # Company name
-        elements.append(Paragraph(self.COMPANY_NAME, self.styles['CustomTitle']))
+        company_para = Paragraph(
+            f"<b>{PDFBranding.COMPANY_NAME}</b>", 
+            self.styles['title']
+        )
+        elements.append(company_para)
         
-        # Branch name
-        branch_text = f"<b>{self.BRANCH_NAME}</b>"
-        elements.append(Paragraph(branch_text, self.styles['CustomSubtitle']))
+        # Branch subtitle with styling
+        branch_para = Paragraph(
+            f'<font color="{PDFColors.MEDIUM_GRAY}">{PDFBranding.BRANCH_NAME}</font>',
+            self.styles['subtitle']
+        )
+        elements.append(branch_para)
         
-        elements.append(Spacer(1, 0.3*inch))
+        # Gold divider line
+        elements.append(PDFLayoutHelpers.create_gold_border_line())
+        elements.append(PDFLayoutHelpers.create_spacer(0.3))
     
-    def _add_footer(self, elements):
-        """Add report footer"""
-        elements.append(Spacer(1, 0.3*inch))
+    def _add_report_title(self, elements, title, subtitle=None):
+        """Add report-specific title section"""
+        # Main title
+        title_para = Paragraph(title, self.styles['title'])
+        elements.append(title_para)
         
-        footer_text = f"Generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}"
-        elements.append(Paragraph(footer_text, self.styles['Footer']))
+        # Optional subtitle (date range, etc.)
+        if subtitle:
+            subtitle_para = Paragraph(subtitle, self.styles['subtitle'])
+            elements.append(subtitle_para)
         
-        footer_text2 = f"{self.COMPANY_NAME} | {self.BRANCH_NAME}"
-        elements.append(Paragraph(footer_text2, self.styles['Footer']))
+        elements.append(PDFLayoutHelpers.create_spacer(0.2))
     
-    def _create_table(self, data, col_widths=None, has_header=True):
-        """Create a styled table"""
+    def _add_professional_footer(self, elements):
+        """Add professional footer"""
+        elements.append(PDFLayoutHelpers.create_spacer(0.3))
+        elements.append(PDFLayoutHelpers.create_gold_border_line())
+        
+        # Generation timestamp
+        timestamp = datetime.now().strftime('%B %d, %Y at %I:%M %p')
+        footer1 = Paragraph(f"Generated on {timestamp}", self.styles['footer'])
+        elements.append(footer1)
+        
+        # Company footer
+        footer2 = Paragraph(
+            f"{PDFBranding.COMPANY_NAME} | {PDFBranding.BRANCH_NAME}",
+            self.styles['footer']
+        )
+        elements.append(footer2)
+    
+    def _create_summary_box(self, summary_data):
+        """Create styled summary metrics box"""
+        data = [[label, value] for label, value in summary_data.items()]
+        table = Table(data, colWidths=[3*inch, 2.5*inch])
+        table.setStyle(PDFTableStyles.get_summary_table_style())
+        return table
+    
+    def _create_data_table(self, data, col_widths=None):
+        """Create professional data table"""
         table = Table(data, colWidths=col_widths)
-        
-        # Base style
-        style = [
-            ('BACKGROUND', (0, 0), (-1, 0), self.HEADER_BG) if has_header else None,
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke) if has_header else None,
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold') if has_header else None,
-            ('FONTSIZE', (0, 0), (-1, 0), 12) if has_header else None,
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12) if has_header else None,
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, self.ROW_ALT_BG]),
-        ]
-        
-        # Remove None values
-        style = [s for s in style if s is not None]
-        table.setStyle(TableStyle(style))
-        
+        table.setStyle(PDFTableStyles.get_standard_table_style())
         return table
     
     # ================================================================
@@ -141,38 +138,40 @@ class PDFReportGenerator:
     def generate_sales_performance_report(self, report_data):
         """Generate Report 1: Sales Performance Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(
+            buffer, pagesize=letter, 
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch,
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch
+            )
         elements = []
         
         # Header
-        self._add_header(elements)
-        
-        # Report title
-        title = Paragraph("Sales Performance Report", self.styles['CustomTitle'])
-        elements.append(title)
+        self._add_professional_header(elements)
         
         # Date range
         date_range = f"Report Period: {report_data['date_range']['start']} to {report_data['date_range']['end']}"
-        elements.append(Paragraph(date_range, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        
+         # Report title
+        self._add_report_title(elements, "Sales Performance Report", f"Report PeriodL {date_range}")
         
         # Summary section
-        elements.append(Paragraph("Summary", self.styles['SectionHeader']))
+        elements.append(Paragraph("Summary", self.styles['section']))
         
-        summary_data = [
-            ['Metric', 'Value'],
-            ['Total Revenue', f"${report_data['summary']['total_income']:,.2f}"],
-            ['Total Quantity Sold', f"{report_data['summary']['total_quantity_sold']:,}"],
-            ['Total Transactions', f"{report_data['summary']['total_transactions']:,}"]
-        ]
+        summary_data = {
+            'Total Revenue', f"${report_data['summary']['total_income']:,.2f}",
+            'Total Quantity Sold', f"{report_data['summary']['total_quantity_sold']:,}",
+            'Total Transactions', f"{report_data['summary']['total_transactions']:,}"
+        }
         
-        summary_table = self._create_table(summary_data, col_widths=[3*inch, 3*inch])
+        summary_table = self._create_summary_box(summary_data)
         elements.append(summary_table)
-        elements.append(Spacer(1, 0.3*inch))
+        elements.append(PDFLayoutHelpers.create_spacer(0.3))
         
         # Sales details
         if report_data['sales']:
-            elements.append(Paragraph("Sales Details", self.styles['SectionHeader']))
+            elements.append(Paragraph("Sales Details", self.styles['section']))
             
             sales_data = [['Sale ID', 'Date', 'Product', 'Qty', 'Price', 'Retailer']]
             
@@ -186,14 +185,14 @@ class PDFReportGenerator:
                     sale['retailer_name'][:20]
                 ])
             
-            sales_table = self._create_table(
+            sales_table = self._create_data_table(
                 sales_data, 
                 col_widths=[0.7*inch, 1*inch, 2*inch, 0.6*inch, 1*inch, 1.5*inch]
             )
             elements.append(sales_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         # Build PDF
         doc.build(elements)
@@ -206,24 +205,25 @@ class PDFReportGenerator:
     def generate_category_distribution_report(self, report_data):
         """Generate Report 2: Category Distribution Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
         elements = []
         
         # Header
-        self._add_header(elements)
-        
-        # Report title
-        title = Paragraph("Category Distribution Report", self.styles['CustomTitle'])
-        elements.append(title)
-        elements.append(Spacer(1, 0.3*inch))
+        self._add_professional_header(elements)
+        self._add_report_title(elements, "Category Distribution Table")
         
         # Summary
-        summary_text = f"Total Categories: {report_data['summary']['total_categories']} | Total Stock: {report_data['summary']['total_stock']:,} units"
-        elements.append(Paragraph(summary_text, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        summary_text = {
+            'Total Categories': str(report_data['summary']['total_categories']),
+            'Total Stock': f"{report_data['summary']['total_stock']:,} units"
+        }
+        elements.append(Paragraph("Summary", self.styles['section']))
+        elements.append(self._create_summary_box(summary_text))
+        elements.append(PDFLayoutHelpers.create_spacer(0.3*inch))
         
         # Category table
-        cat_data = [['Category', 'Products', 'Stock Quantity', 'Percentage']]
+        elements.append(Paragraph("Category Breakdown", self.styles['section']))
+        cat_data = [['Category', 'Products', 'Stock Quantity', 'Share']]
         
         for cat in report_data['categories']:
             cat_data.append([
@@ -233,14 +233,14 @@ class PDFReportGenerator:
                 f"{cat['percentage_share']:.1f}%"
             ])
         
-        cat_table = self._create_table(
+        cat_table = self._create_data_table(
             cat_data,
             col_widths=[2.5*inch, 1.5*inch, 1.5*inch, 1.5*inch]
         )
         elements.append(cat_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         doc.build(elements)
         buffer.seek(0)
@@ -252,23 +252,27 @@ class PDFReportGenerator:
     def generate_retailer_performance_report(self, report_data):
         """Generate Report 3: Retailer Performance Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
         elements = []
         
         # Header
-        self._add_header(elements)
+        self._add_professional_header(elements)
         
         # Report title
-        title = Paragraph("Retailer Performance Report", self.styles['CustomTitle'])
-        elements.append(title)
-        elements.append(Spacer(1, 0.3*inch))
+        self._add_report_title(elements, "Retailer Performance Report")
         
         # Summary
-        summary_text = f"Total Retailers: {report_data['summary']['total_retailers']} | Active Today: {report_data['summary']['active_today']}"
-        elements.append(Paragraph(summary_text, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        summary_text = {
+            'Total Retailers': str(report_data['summary']['total_retailers']),
+            'Active Today': str(report_data['summary']['active_today'])
+        }
+        
+        elements.append(Paragraph("Summary", self.styles['section']))
+        elements.append(self._create_summary_box(summary_text))
+        elements.append(PDFLayoutHelpers.create_spacer(0.3*inch))
         
         # Retailer table
+        elements.append(Paragraph("Performance Metrics", self.styles['section']))
         ret_data = [['Retailer', 'Daily Quota', 'Today\'s Sales', 'Progress', 'Streak', 'Total Sales']]
         
         for ret in report_data['retailers']:
@@ -281,14 +285,14 @@ class PDFReportGenerator:
                 f"${ret['total_sales']:,.2f}"
             ])
         
-        ret_table = self._create_table(
+        ret_table = self._create_data_table(
             ret_data,
             col_widths=[2*inch, 1*inch, 1*inch, 0.8*inch, 0.7*inch, 1*inch]
         )
         elements.append(ret_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         doc.build(elements)
         buffer.seek(0)
@@ -300,23 +304,27 @@ class PDFReportGenerator:
     def generate_alerts_report(self, report_data):
         """Generate Report 4: Low-Stock and Expiration Alert Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
         elements = []
         
         # Header
-        self._add_header(elements)
+        self._add_professional_header(elements)
         
         # Report title
-        title = Paragraph("Low-Stock & Expiration Alert Report", self.styles['CustomTitle'])
-        elements.append(title)
-        elements.append(Spacer(1, 0.3*inch))
+        self._add_report_title(elements, "Low-Stock & Expiration Alert Report")
         
         # Summary
-        summary_text = f"Total Alerts: {report_data['summary']['total_alerts']} | Critical: {report_data['summary']['critical_alerts']} | Warning: {report_data['summary']['warning_alerts']}"
-        elements.append(Paragraph(summary_text, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        summary_text = {
+            'Total Alerts': str(report_data['summary']['total_alerts']),
+            'Critical': str(report_data['summary']['critical_alerts']), 
+            'Warning': str(report_data['summary']['warning_alerts'])
+        }
+        elements.append(Paragraph("Alert Summary", self.styles['section']))
+        elements.append(self._create_summary_box(summary_text))
+        elements.append(PDFLayoutHelpers.create_spacer(0.3*inch))
         
         # Alerts table
+        elements.append(Paragraph("Alert Details", self.styles['section']))
         alert_data = [['Product', 'Current Stock', 'Min Level', 'Expiration', 'Status', 'Severity']]
         
         for alert in report_data['alerts']:
@@ -330,24 +338,15 @@ class PDFReportGenerator:
                 alert['severity']
             ])
         
-        alert_table = self._create_table(
+        alert_table = self._create_data_table(
             alert_data,
             col_widths=[2*inch, 1*inch, 0.9*inch, 1*inch, 1.5*inch, 0.8*inch]
         )
         
-        # Apply color coding for severity
-        table_style = alert_table._cellStyles
-        for i, alert in enumerate(report_data['alerts'], start=1):
-            if alert['severity'] == 'CRITICAL':
-                alert_table.setStyle(TableStyle([
-                    ('BACKGROUND', (5, i), (5, i), colors.HexColor('#FFCCCC')),
-                    ('TEXTCOLOR', (5, i), (5, i), self.ACCENT_COLOR)
-                ]))
-        
         elements.append(alert_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         doc.build(elements)
         buffer.seek(0)
@@ -359,27 +358,29 @@ class PDFReportGenerator:
     def generate_managerial_activity_report(self, report_data):
         """Generate Report 5: Managerial Activity Log Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
         elements = []
         
         # Header
-        self._add_header(elements)
-        
-        # Report title
-        title = Paragraph("Managerial Activity Log Report", self.styles['CustomTitle'])
-        elements.append(title)
+        self._add_professional_header(elements)
         
         # Date range
-        date_range = f"Report Period: {report_data['date_range']['start']} to {report_data['date_range']['end']}"
-        elements.append(Paragraph(date_range, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        date_range = f"{report_data['date_range']['start']} to {report_data['date_range']['end']}"
+
+        # Report title
+        self._add_report_title(elements, "Managerial Activity Log Report", f"Report Period: {date_range}")
         
         # Summary
-        summary_text = f"Total Actions: {report_data['summary']['total_actions']} | Unique Managers: {report_data['summary']['unique_managers']}"
-        elements.append(Paragraph(summary_text, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        summary_text = {
+            'Total Actions': str(report_data['summary']['total_actions']),
+            'Unique Managers': str(report_data['summary']['unique_managers'])
+            }
+        elements.append(Paragraph("Summary", self.styles['section']))
+        elements.append(self._create_summary_box(summary_text))
+        elements.append(PDFLayoutHelpers (0.3*inch))
         
         # Activity table
+        elements.append(Paragraph("Activity Log", self.styles['section']))
         log_data = [['Log ID', 'Product', 'Action', 'Manager', 'Date/Time']]
         
         for log in report_data['logs'][:100]:  # Limit to 100
@@ -391,14 +392,14 @@ class PDFReportGenerator:
                 log['date_time'][:16]
             ])
         
-        log_table = self._create_table(
+        log_table = self._create_data_table(
             log_data,
             col_widths=[0.7*inch, 2*inch, 1.3*inch, 1.5*inch, 1.5*inch]
         )
         elements.append(log_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         doc.build(elements)
         buffer.seek(0)
@@ -421,20 +422,25 @@ class PDFReportGenerator:
         elements = []
         
         # Header
-        self._add_header(elements)
+        self._add_professional_header(elements)
         
         # Report title
-        title = Paragraph("User Accounts Report", self.styles['CustomTitle'])
-        elements.append(title)
-        elements.append(Spacer(1, 0.3*inch))
+        self._add_report_title(elements, "User Accounts Report")
         
         # Summary
         summary = report_data['summary']
-        summary_text = f"Total Users: {summary['total_users']} | Admins: {summary['admins']} | Managers: {summary['managers']} | Retailers: {summary['retailers']}"
-        elements.append(Paragraph(summary_text, self.styles['CustomSubtitle']))
-        elements.append(Spacer(1, 0.3*inch))
+        summary_text = {
+            'Total Users': str(summary['total_users']),
+            'Admins': str(summary['admins']),
+            'Managers': str(summary['managers']),
+            'Retailers': str(summary['retailers'])
+            }
+        elements.append(Paragraph("Summary", self.styles['section']))
+        elements.append(self._create_summary_box(summary_text)))
+        elements.append(PDFLayoutHelpers(0.3*inch))
         
         # User table
+        elements.append(Paragraph("User Details", self.styles['section']))
         user_data = [['User ID', 'Username', 'Full Name', 'Role', 'Status']]
         
         for user in report_data['users']:
@@ -446,14 +452,14 @@ class PDFReportGenerator:
                 user['account_status']
             ])
         
-        user_table = self._create_table(
+        user_table = self._create_data_table(
             user_data,
             col_widths=[0.8*inch, 1.5*inch, 2*inch, 1.2*inch, 1.2*inch]
         )
         elements.append(user_table)
         
         # Footer
-        self._add_footer(elements)
+        self._add_professional_footer(elements)
         
         doc.build(elements)
         buffer.seek(0)
