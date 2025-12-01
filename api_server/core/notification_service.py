@@ -111,15 +111,15 @@ StockaDoodle Alert System
         sent_count = 0
         for manager in managers:
             # In production, use manager's email address
-            manager_email = os.getenv('MANAGER_EMAIL', 'manager@example.com')
-            if NotificationService.send_email(manager_email, subject, body):
-                sent_count += 1
+            if hasattr(manager, 'email') and manager.email:
+                if NotificationService.send_email(manager.email, subject, body):
+                    sent_count += 1
         
         return {
             'status': 'sent',
             'alerts_sent': sent_count,
             'products_count': len(low_stock_products),
-            'recipients': manager.count()
+            'recipients': len(managers)
         }
     
     @staticmethod
@@ -166,7 +166,10 @@ The following products have batches expiring within {days_ahead} days:
         for product_name, batches in products_expiring.items():
             body += f"• {product_name}\n"
             for batch in batches:
-                days_until = (batch.expiration_date - date.today()).days
+                exp_date = batch.expiration_date
+                if isinstance(exp_date, datetime):
+                    exp_date = exp_date.date()
+                days_until = (exp_date - date.today()).days
                 body += f"  - Batch #{batch.id}: {batch.quantity} units, expires {batch.expiration_date} ({days_until} days)\n"
             body += "\n"
         
@@ -180,16 +183,16 @@ StockaDoodle Alert System
         # Send to all managers
         sent_count = 0
         for manager in managers:
-            manager_email = os.getenv('MANAGER_EMAIL', 'manager@example.com')
-            if NotificationService.send_email(manager_email, subject, body):
-                sent_count += 1
+            if hasattr(manager, 'email') and manager.email:
+                if NotificationService.send_email(manager.email, subject, body):
+                    sent_count += 1
         
         return {
             'status': 'sent',
             'alerts_sent': sent_count,
             'products_count': len(products_expiring),
             'batches_count': len(expiring_batches),
-            'recipients': manager.count()
+            'recipients': len(managers)
         }
     
     @staticmethod
@@ -238,7 +241,10 @@ Daily Inventory Summary
             for batch in expiring[:5]:  # Show top 5
                 product = Product.objects(id=batch.product).first()
                 if product:
-                    days_until = (batch.expiration_date - date.today()).days
+                    exp_date = batch.expiration_date
+                    if isinstance(exp_date, datetime):
+                        exp_date = exp_date.date()
+                    days_until = (exp_date - date.today()).days
                     body += f"• {product.name}: Batch #{batch.id} expires in {days_until} days\n"
             if len(expiring) > 5:
                 body += f"  ... and {len(expiring) - 5} more batches\n"
@@ -253,9 +259,9 @@ StockaDoodle Alert System
         
         sent_count = 0
         for manager in managers:
-            manager_email = os.getenv('MANAGER_EMAIL', 'manager@example.com')
-            if NotificationService.send_email(manager_email, subject, body):
-                sent_count += 1
+            if hasattr(manager, 'email') and manager.email:
+                if NotificationService.send_email(manager.email, subject, body):
+                    sent_count += 1
         
         return {
             'status': 'sent',
