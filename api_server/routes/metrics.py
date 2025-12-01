@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.user import User
 from models.retailer_metrics import RetailerMetrics
 from core.sales_manager import SalesManager
@@ -16,12 +15,17 @@ bp = Blueprint('metrics', __name__)
 def get_retailer_metrics(user_id):
     """Get retailer's current performance metrics"""
     try:
-        metrics = RetailerMetrics.query.filter_by(retailer_id=user_id).first()
+        user  = User.objects(id=user_id).first()
         
-        if not metrics:
+        if not user:
             return jsonify({"errors": ["Retailer metrics not found"]}), 404
         
-        return jsonify(metrics.to_dict()), 200
+        if user.role not in ['retailer', 'staff']:
+            return jsonify({"errors": ["User is not a retailer"]}), 403
+        
+        performance = SalesManager.get_retailer_performance(user_id)
+        
+        return jsonify(performance), 200
         
     except Exception as e:
         return jsonify({"errors": [f"Failed to get metrics: {str(e)}"]}), 500
@@ -30,24 +34,18 @@ def get_retailer_metrics(user_id):
 # ----------------------------------------------------------------------
 # GET /api/v1/retailer/leaderboard → Get top performing retailers
 # Query params:
-#   sort_by: String (optional) → 'daily_quota_usd' or 'current_streak'
 #   limit: Integer (optional, default=10)
 # ----------------------------------------------------------------------
 @bp.route('/leaderboard', methods=['GET'])
 def get_leaderboard():
     """Get top performing retailers"""
     try:
-        sort_by = request.args.get('sort_by', 'current_streak')
         limit = request.args.get('limit', 10, type=int)
-        
-        if sort_by not in ['daily_quota_usd', 'current_streak', 'total_sales']:
-            sort_by = 'current_streak'
-        
+    
         leaderboard = SalesManager.get_leaderboard(limit=limit)
         
         return jsonify({
             'leaderboard': leaderboard,
-            'sort_by': sort_by,
             'total_retailers': len(leaderboard)
         }), 200
         
@@ -99,37 +97,33 @@ def update_retailer_quota(user_id):
 
 
 # ----------------------------------------------------------------------
-# POST /api/v1/retailer/<user_id>/reset-streak → Reset retailer streak
+# POST /api/v1/retailer/reset-daily → Reset daily metrics 
 # Body:
 #   admin_id: Integer (optional) → Admin performing the reset
 # ----------------------------------------------------------------------
-@bp.route('/<int:user_id>/reset-streak', methods=['POST'])
+@bp.route('/reset-daily', methods=['POST'])
 def reset_retailer_streak(user_id):
-    """Reset retailer's streak (admin/manager only)"""
+    """Reset daily metrics for all retailers (called at midnight)"""
     data = request.get_json() or {}
     
+    admin_id = data.get('admin_id')
+    if not admin_id:
+        return jsonify({"errors": ["Admin ID required"]}), 400
+    
     try:
-        metrics = RetailerMetrics.query.filter_by(retailer_id=user_id).first()
-        if not metrics:
-            return jsonify({"errors": ["Retailer metrics not found"]}), 404
-        
-        old_streak = metrics.current_streak
-        metrics.current_streak = 0
-        db.session.commit()
-        
+        updated_count = SalesManager.reset_daily_metrics()
+
         # Log activity
-        admin_id = data.get('admin_id')
         ActivityLogger.log_api_activity(
             method='POST',
-            target_entity='retailer_metrics',
+            target_entity='metrics_reset',
             user_id=admin_id,
-            details=f"Reset streak for retailer {user_id} (was {old_streak})"
+            details=f"Reset daily metrics for {updated_count} retailers"
         )
         
         return jsonify({
-            'message': 'Streak reset successfully',
-            'previous_streak': old_streak,
-            'current_streak': 0
+            'message': 'Daily metrics was reset successfully',
+            'retailers_updated': updated_count
         }), 200
         
     except Exception as e:

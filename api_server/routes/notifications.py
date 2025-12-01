@@ -1,8 +1,6 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from core.notification_service import NotificationService
 from core.activity_logger import ActivityLogger
-from datetime import datetime
 
 bp = Blueprint('notifications', __name__)
 

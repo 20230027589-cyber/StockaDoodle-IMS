@@ -1,7 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from core.report_generator import ReportGenerator
 from datetime import datetime, date, timedelta
-from flask import send_file
 from core.pdf_report_generator import PDFReportGenerator
 
 # Initialize PDF generator

@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.category import Category
 from core.activity_logger import ActivityLogger
 from utils import get_image_blob
+from mongoengine.errors import DoesNotExist
 
 bp = Blueprint('categories', __name__)
 
@@ -13,8 +13,8 @@ bp = Blueprint('categories', __name__)
 @bp.route('', methods=['GET'])
 def list_categories():
     """List all categories with optional image inclusion"""
-    include_image = request.args.get('include_image') == 'true'
-    categories = Category.query.order_by(Category.name).all()
+    include_image = request.args.get('include_image' , 'false').lower() == 'true'
+    categories = Category.objects().order_by('name')
     
     return jsonify({
         'total': len(categories),
@@ -28,10 +28,13 @@ def list_categories():
 @bp.route('/<int:cat_id>', methods=['GET'])
 def get_category(cat_id):
     """Get single category by ID"""
-    category = Category.query.get_or_404(cat_id)
-    include_image = request.args.get('include_image') == 'true'
-    
-    return jsonify(category.to_dict(include_image)), 200
+    include_image = request.args.get('include_image' , 'false').lower() == 'true'
+
+    try: 
+        category = Category.objects.get(id=cat_id)
+        return jsonify(category.to_dict(include_image=include_image)), 200
+    except DoesNotExist:
+        return jsonify({"errors": ["Category not found"]}), 404
 
 
 # ----------------------------------------------------------------------
@@ -51,32 +54,38 @@ def create_category():
         return jsonify({"errors": ["Category name is required"]}), 400
     
     # Check uniqueness
-    if Category.query.filter_by(name=name).first():
+    if Category.objects(name__iexact=name.strip()).first():
         return jsonify({"errors": ["Category name already exists"]}), 400
     
     # Handle image
     image_blob = get_image_blob()
+    image_base64 = None
+    if image_blob:
+        import base64
+        image_base64 = base64.b64encode(image_blob).decode('utf-8')
     
-    category = Category(
-        name=name,
-        description=data.get('description'),
-        category_image=image_blob
-    )
-    
-    db.session.add(category)
-    db.session.commit()
-    
-    # Log activity
-    user_id = data.get('user_id')
-    if user_id:
-        ActivityLogger.log_api_activity(
-            method='POST',
-            target_entity='category',
-            user_id=user_id,
-            details=f"Created category: {name}"
+    try: 
+        category = Category(
+            name=name.strip(),
+            description=data.get('description'),
+            category_image=image_base64
         )
+        category.save()
+        
+        # Log activity
+        user_id = data.get('user_id')
+        if user_id:
+            ActivityLogger.log_api_activity(
+                method='POST',
+                target_entity='category',
+                user_id=user_id,
+                details=f"Created category: {name}"
+            )
+            
+        return jsonify(category.to_dict(include_image=True)), 201
     
-    return jsonify(category.to_dict(include_image=True)), 201
+    except Exception as e:
+        return jsonify({"errors": [f"Server error: {str(e)}"]}), 500
 
 
 # ----------------------------------------------------------------------
@@ -88,7 +97,10 @@ def create_category():
 @bp.route('/<int:cat_id>', methods=['PUT'])
 def replace_category(cat_id):
     """Replace entire category"""
-    category = Category.query.get_or_404(cat_id)
+    try:
+        category = Category.objects.get(id=cat_id)
+    except DoesNotExist:
+        return jsonify({"errors": ["Category not found"]}), 404
     
     is_form = request.content_type and 'multipart/form-data' in request.content_type
     data = request.form.to_dict() if is_form else (request.get_json() or {})
@@ -98,10 +110,9 @@ def replace_category(cat_id):
         return jsonify({"errors": ["Category name is required for PUT"]}), 400
     
     # Check uniqueness (excluding current)
-    existing = Category.query.filter(
-        Category.name == name,
-        Category.id != cat_id
-    ).first()
+    existing = Category.objects(
+        name__iexact = name.strip(),
+        id__ne = cat_id).first()
     if existing:
         return jsonify({"errors": ["Category name already exists"]}), 400
     
@@ -111,20 +122,28 @@ def replace_category(cat_id):
     
     # Handle image
     new_image = get_image_blob()
-    if new_image is not None:
-        category.category_image = new_image
+    image_base64 = None
+    if new_image:
+        import base64
+        image_base64 = base64.b64encode(new_image).decode('utf-8')
+        
+    try:    
+        if image_base64 is not None:
+            category.category_image = image_base64
+
+        category.save()
     
-    db.session.commit()
-    
-    # Log activity
-    ActivityLogger.log_api_activity(
-        method='PUT',
-        target_entity='category',
-        user_id=data.get('user_id'),
-        details=f"Replaced category: {old_name} → {name}"
-    )
-    
-    return jsonify(category.to_dict(include_image=True)), 200
+        # Log activity
+        ActivityLogger.log_api_activity(
+            method='PUT',
+            target_entity='category',
+            user_id=data.get('user_id'),
+            details=f"Replaced category: {old_name} → {name}"
+        )
+        return jsonify(category.to_dict(include_image=True)), 200
+
+    except Exception as e:
+        return jsonify({"errors": [str(e)]}), 500
 
 
 # ----------------------------------------------------------------------
@@ -136,27 +155,30 @@ def replace_category(cat_id):
 @bp.route('/<int:cat_id>', methods=['PATCH'])
 def update_category(cat_id):
     """Partially update category"""
-    category = Category.query.get_or_404(cat_id)
+    try:
+        category = Category.objects.get(id=cat_id)
+    except DoesNotExist:
+        return jsonify ({"errors": ['Category not found']}), 404
     
     is_form = request.content_type and 'multipart/form-data' in request.content_type
     data = request.form.to_dict() if is_form else (request.get_json() or {})
     
     changes = []
+    user_id = data.get('user_id')
     
     if 'name' in data:
         if not data['name']:
             return jsonify({"errors": ["Category name cannot be empty"]}), 400
         
         # Check uniqueness
-        existing = Category.query.filter(
-            Category.name == data['name'],
-            Category.id != cat_id
-        ).first()
+        existing = Category.objects(
+            name__iexact= data['name'].strip(),
+            id__ne = cat_id).first()
         if existing:
             return jsonify({"errors": ["Category name already exists"]}), 400
         
         changes.append(f"name: {category.name} → {data['name']}")
-        category.name = data['name']
+        category.name = data['name'].strip()
     
     if 'description' in data:
         changes.append("description updated")
@@ -165,20 +187,27 @@ def update_category(cat_id):
     # Handle image
     new_image = get_image_blob()
     if new_image is not None:
+        import base64
+        category.category_image = base64.b64encode(new_image).decode('utf-8')
         changes.append("image updated")
-        category.category_image = new_image
     
-    db.session.commit()
+    if not changes:
+        return jsonify({"message": "No changes provided"}), 200    
     
-    # Log activity
-    ActivityLogger.log_api_activity(
-        method='PATCH',
-        target_entity='category',
-        user_id=data.get('user_id'),
-        details=f"Updated category {category.name}: {', '.join(changes)}"
-    )
+    try:
+        category.save()
+        # Log activity
+        ActivityLogger.log_api_activity(
+            method='PATCH',
+            target_entity='category',
+            user_id=data.get('user_id'),
+            details=f"Updated category {category.name}: {', '.join(changes)}"
+        )
+        
+        return jsonify(category.to_dict(include_image=True)), 200
     
-    return jsonify(category.to_dict(include_image=True)), 200
+    except Exception as e:
+        return jsonify ({"errors": [str(e)]}), 500
 
 
 # ----------------------------------------------------------------------
@@ -189,18 +218,23 @@ def delete_category(cat_id):
     """Delete category (only if no products linked)"""
     data = request.get_json(silent=True) or {}
 
-    category = Category.query.get_or_404(cat_id)
+    try: 
+        category = Category.objects.get(id=cat_id)
+    except DoesNotExist:
+        return jsonify ({"errors": ["Category not found"]}), 404
+    
     user_id = data.get("user_id")
 
     # Check if category has products
-    if category.products:
+    from models.product import Product
+    if Product.objects(category_id=cat_id).first():
+        count = Product.objects(category_id=cat_id).count()
         return jsonify({
-            "errors": [f"Cannot delete category while it has {len(category.products)} linked products"]
+            "errors": [f"Cannot delete category while it has {count} linked products"]
         }), 400
     
     category_name = category.name
-    db.session.delete(category)
-    db.session.commit()
+    category.delete()
     
     # Log activity
     ActivityLogger.log_api_activity(

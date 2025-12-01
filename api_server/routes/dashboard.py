@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.product import Product
 from models.user import User
 from models.sale import Sale
@@ -18,14 +17,13 @@ bp = Blueprint('dashboard', __name__)
 def admin_dashboard():
     """Admin Dashboard Metrics"""
     try:
-        total_users = User.query.count()
-        total_products = Product.query.count()
-        total_sales = Sale.query.count()
+        total_users = User.objects.count()
+        total_products = Product.objects.count()
+        total_sales = Sale.objects.count()
         
         # Calculate total revenue
-        total_revenue = db.session.query(
-            db.func.sum(Sale.total_amount)
-        ).scalar() or 0.0
+        all_sales = Sale.objects()
+        total_revenue = sum(sale.total_amount for sale in all_sales)
         
         return jsonify({
             'total_users': total_users,
@@ -63,7 +61,7 @@ def manager_dashboard():
             'recent_logs': [log.to_dict() for log in recent_logs],
             'low_stock_products': [
                 {
-                    'id': p.id,
+                    'id': p.product_id,
                     'name': p.name,
                     'current_stock': p.stock_level,
                     'min_stock_level': p.min_stock_level
@@ -85,7 +83,7 @@ def retailer_dashboard(user_id):
     """Retailer Dashboard Metrics"""
     try:
         # Verify user exists and is a retailer
-        user = User.query.get(user_id)
+        user = User.objects(user_id=user_id).first()
         if not user:
             return jsonify({"errors": ["User not found"]}), 404
         
@@ -93,10 +91,10 @@ def retailer_dashboard(user_id):
             return jsonify({"errors": ["User is not a retailer"]}), 403
         
         # Get available products count
-        available_products = Product.query.filter(Product.stock_level > 0).count()
+        available_products = Product.objects(stock_level___gt=0).count()
         
         # Get retailer metrics
-        metrics = RetailerMetrics.query.filter_by(retailer_id=user_id).first()
+        metrics = RetailerMetrics.objects(retailer=user_id).first()
         
         if not metrics:
             return jsonify({

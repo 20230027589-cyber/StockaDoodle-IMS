@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.sale import Sale
 from core.sales_manager import SalesManager, SalesError
 from core.inventory_manager import InventoryError
@@ -44,6 +43,20 @@ def record_sale():
     
     try:
         sale = SalesManager.record_atomic_sale(retailer_id, items, total_amount)
+        
+        # Log product actions for each item sold
+        from models.product import Product
+        for item in items:
+            product = Product.objects(id=item['product_id']).first()
+            if product:
+                ActivityLogger.log_product_action(
+                    product_id=product.id,
+                    user_id=retailer_id,
+                    action_type='Sale',
+                    quantity=item['quantity'],
+                    notes=f"Sold via sale #{sale.id}"
+                )
+        
         return jsonify({
             "message": "Sale recorded successfully",
             "sale": sale.to_dict(include_items=True)

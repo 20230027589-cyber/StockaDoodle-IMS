@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.product_log import ProductLog
 from core.activity_logger import ActivityLogger
 from core.inventory_manager import InventoryManager, InventoryError
@@ -115,7 +114,6 @@ def dispose_product():
     except InventoryError as e:
         return jsonify({"errors": [str(e)]}), 400
     except Exception as e:
-        db.session.rollback()
         return jsonify({"errors": [f"Unexpected error: {str(e)}"]}), 500
 
 

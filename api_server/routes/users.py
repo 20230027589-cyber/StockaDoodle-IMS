@@ -1,5 +1,4 @@
 from flask import Blueprint, request, jsonify
-from extensions import db
 from models.user import User
 from core.user_manager import UserManager, UserError
 from core.mfa_service import MFAService
