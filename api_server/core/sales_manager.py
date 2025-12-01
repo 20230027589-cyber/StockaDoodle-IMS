@@ -50,9 +50,7 @@ class SalesManager:
             for item in items:
                 InventoryManager.deduct_stock_fefo(
                     product_id=item['product_id'],
-                    qty_needed=item['quantity'],
-                    user_id=retailer_id,
-                    reason="Sale"
+                    qty_needed=item['quantity']
                 )
 
             # Phase 3: Create sale record
@@ -73,7 +71,7 @@ class SalesManager:
                 )
                 sale.items.append(sale_item)
             
-            sale_item.save()
+            sale.save()
 
             # Phase 5: Update retailer metrics
             SalesManager._update_retailer_metrics(retailer_id, total_amount)

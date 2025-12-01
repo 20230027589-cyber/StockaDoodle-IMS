@@ -6,8 +6,7 @@ from datetime import date, datetime, timezone
 class RetailerMetrics(BaseDocument):
     meta = {
         'collection': 'retailer_metrics',
-        'ordering': ['retailer'],
-        'indexes': ['retailer', 'daily_quota', 'total_sales']
+        'ordering': ['retailer']
         }
 
     # which retailer this belongs to

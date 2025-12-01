@@ -92,7 +92,7 @@ def list_product():
         "per_page": per_page,
         "total": total,
         "pages": pages,
-        "products": [p.to_dict(include_image) for p in products]
+        "products": [p.to_dict(include_image=include_image) for p in products]
     })
     
     
@@ -250,7 +250,7 @@ def add_stock_batch(product_id):
     reason = data.get("reason") or "Stock added"
     
     batch = StockBatch(
-        product=product.id,
+        product_id=product.id,
         quantity=quantity,
         expiration_date=expiration_date,
         added_at=datetime.now(timezone.utc),
@@ -271,7 +271,6 @@ def add_stock_batch(product_id):
         product_id=product.id,
         user_id=added_by,
         action_type='Restock',
-        quantity=quantity,
         notes=f"{reason}. Expires: {expiration_date}"
     )
     

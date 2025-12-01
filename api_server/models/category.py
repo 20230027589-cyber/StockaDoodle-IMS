@@ -5,8 +5,7 @@ import base64
 class Category(BaseDocument):
     meta = {
         'collection': 'categories',
-        'ordering': ['name'],
-        'indexes': ['name']
+        'ordering': ['name']
         }
     
     # name of the category, must be unique

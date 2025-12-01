@@ -192,7 +192,7 @@ class PDFLayoutHelpers:
     @staticmethod
     def create_spacer(height_inches=0.2):
         """Create a spacer of specified height"""
-        return Spacer(1, height_inches * inch)
+        return Spacer(0, height_inches * inch)
     
     @staticmethod
     def create_section_divider():
@@ -224,3 +224,4 @@ class PDFBranding:
     COMPANY_NAME = "StockaDoodle Inventory Management System"
     BRANCH_NAME = "QuickMart – Quezon Branch"
     LOGO_PATH = "desktop_app/assets/icons/stockadoodle-transparent.png"
+    LOGO_FALLBACK_PATH  = "desktop_app/assets/icons/stockadoodle.png"

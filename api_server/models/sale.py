@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 
 class SaleItem(EmbeddedDocument):
     __tablename__ = "sale_items"
-
-    id = IntField(required=True)
     product_id = IntField(required=True)
 
     # how many of that item
@@ -33,8 +31,7 @@ class SaleItem(EmbeddedDocument):
 class Sale(BaseDocument):
     meta = {
         'collection': 'sales',
-        'ordering': ['-created_at'],
-        'indexes': ['retailer_id', '-created_at']
+        'ordering': ['-created_at']
     }
     
     # which retailer made the sale

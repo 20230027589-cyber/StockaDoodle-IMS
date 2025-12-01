@@ -52,8 +52,6 @@ def record_sale():
                 ActivityLogger.log_product_action(
                     product_id=product.id,
                     user_id=retailer_id,
-                    action_type='Sale',
-                    quantity=item['quantity'],
                     notes=f"Sold via sale #{sale.id}"
                 )
         

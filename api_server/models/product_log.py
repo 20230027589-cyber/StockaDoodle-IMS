@@ -6,8 +6,7 @@ from datetime import datetime, timezone
 class ProductLog(BaseDocument):
     meta = {
         'collection': 'product_logs',
-        'ordering': ['-log_time'],
-        'indexes': ['product_id', '-log_time']
+        'ordering': ['-log_time']
     }
 
     # product related to the log

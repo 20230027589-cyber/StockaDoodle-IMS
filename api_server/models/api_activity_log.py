@@ -6,9 +6,8 @@ from datetime import datetime
 class APIActivityLog(BaseDocument):
     meta = {
         'collection': 'api_activity_logs',
-        'ordering': ['-timestamp'],
-        'indexes': ['method', 'target_entity', '-timestamp']
-    }
+        'ordering': ['-timestamp']
+        }
     
     # http method like POST or GET
     method = StringField(max_length=10, required=True)

@@ -1,18 +1,16 @@
 from .base import BaseDocument
 from mongoengine import IntField, DateField, DateTimeField, StringField, ReferenceField
 from .user import User
-from .product import Product
 from datetime import datetime
 
 class StockBatch(BaseDocument):
     meta = {
         'collection': 'stock_batches',
-        'ordering': ['expiration_date'],
-        'indexes': ['product_id', 'expiration_date']
+        'ordering': ['expiration_date']
         }
 
     # product this batch belongs to
-    product = ReferenceField(Product)
+    product_id = IntField(required=True)
 
     # how many items inside this batch
     quantity = IntField(required=True, default=0)
@@ -36,6 +34,6 @@ class StockBatch(BaseDocument):
             "quantity": self.quantity,
             "expiration_date": self.expiration_date.isoformat() if self.expiration_date else None,
             "added_at": self.added_at.isoformat() if self.added_at else None,
-            "added_by": self.added_by_user.full_name if self.added_by_user else "Unknown",
+            "added_by": self.added_by.id if self.added_by else None,
             "reason": self.reason
         }

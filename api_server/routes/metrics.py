@@ -102,7 +102,7 @@ def update_retailer_quota(user_id):
 #   admin_id: Integer (optional) → Admin performing the reset
 # ----------------------------------------------------------------------
 @bp.route('/reset-daily', methods=['POST'])
-def reset_retailer_streak(user_id):
+def reset_retailer_streak():
     """Reset daily metrics for all retailers (called at midnight)"""
     data = request.get_json() or {}
     

@@ -4,8 +4,7 @@ from mongoengine import StringField, IntField
 class Product(BaseDocument):
     meta = {
         'collection': 'products',
-        'ordering': ['name'],
-        'indexes': ['category_id', 'price']
+        'ordering': ['name']
         }
     
     # name of the product, must be unique

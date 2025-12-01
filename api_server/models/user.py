@@ -7,8 +7,7 @@ import base64
 class User(BaseDocument):
     meta = {
         'collection': 'users',
-        'ordering': ['username'],
-        'indexes': ['username', 'email', 'role']
+        'ordering': ['username']
         }
     
     # full name for display
