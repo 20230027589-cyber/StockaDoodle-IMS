@@ -1,4 +1,4 @@
-from api_server.utils.counters import get_next_sequence
+from utils.counters import get_next_sequence
 from models.sale import Sale, SaleItem
 from models.product import Product
 from models.retailer_metrics import RetailerMetrics
