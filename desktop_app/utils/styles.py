@@ -5,10 +5,16 @@
 #
 # Usage: Imported by UI modules to apply consistent styling across the application.
 
+import os
 from utils.config import AppConfig
 from PyQt6.QtWidgets import QTableWidget, QHeaderView
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtCore import Qt
+
+# Pre-compute icon paths for QSS
+_ICONS_DIR = os.path.abspath(AppConfig.ICONS_DIR).replace('\\', '/')
+_CHEVRON_DOWN_ICON = f"{_ICONS_DIR}/chevron-down.svg"
+_CALENDAR_ICON = f"{_ICONS_DIR}/calendar.svg"
 
 
 def get_global_stylesheet():
@@ -178,7 +184,7 @@ def get_global_stylesheet():
     }}
     
     QComboBox::down-arrow {{
-        image: url({AppConfig.ICONS_DIR}/chevron-down.svg);
+        image: url({_CHEVRON_DOWN_ICON});
         width: 16px;
         height: 16px;
     }}
@@ -197,7 +203,7 @@ def get_global_stylesheet():
     }}
     
     QDateEdit::down-arrow {{
-        image: url({AppConfig.ICONS_DIR}/calendar.svg);
+        image: url({_CALENDAR_ICON});
         width: 16px;
         height: 16px;
     }}
@@ -348,14 +354,12 @@ def get_product_card_style():
         background-color: {AppConfig.CARD_BACKGROUND};
         border: 1px solid {AppConfig.BORDER_COLOR};
         border-radius: {AppConfig.CARD_RADIUS}px;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
         padding: 15px;
     }}
     
     QFrame.product-card:hover {{
         border: 2px solid {AppConfig.PRIMARY_COLOR};
         background-color: rgba(108, 92, 231, 0.1);
-        transform: translateY(-2px);
     }}
     
     QLabel.product-image {{
@@ -408,13 +412,12 @@ def get_product_card_style():
 
 
 def get_category_card_style():
-    """Returns stylesheet for category cards."""
+    """Returns stylesheet for category cards (matches product card style)."""
     return f"""
     QFrame.category-card {{
         background-color: {AppConfig.CARD_BACKGROUND};
         border: 1px solid {AppConfig.BORDER_COLOR};
         border-radius: {AppConfig.CARD_RADIUS}px;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15);
         padding: 15px;
     }}
     
@@ -423,10 +426,36 @@ def get_category_card_style():
         background-color: rgba(108, 92, 231, 0.1);
     }}
     
+    QLabel.category-image {{
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: {AppConfig.INPUT_RADIUS}px;
+        background-color: rgba(0,0,0,0.1);
+    }}
+    
     QLabel.category-title {{
-        font-weight: bold;
         font-size: {AppConfig.FONT_SIZE_LARGE}pt;
+        font-weight: bold;
         color: {AppConfig.LIGHT_TEXT};
+    }}
+    
+    QLabel.category-detail {{
+        font-size: {AppConfig.FONT_SIZE_MEDIUM}pt;
+        color: {AppConfig.TEXT_COLOR_ALT};
+    }}
+    
+    QPushButton.category-action-btn {{
+        background-color: {AppConfig.PRIMARY_COLOR};
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: {AppConfig.FONT_SIZE_NORMAL}pt;
+        font-weight: 500;
+        width: 100%;
+    }}
+    
+    QPushButton.category-action-btn:hover {{
+        background-color: {AppConfig.PRIMARY_HOVER};
     }}
     """
 
@@ -458,6 +487,28 @@ def get_dialog_style():
     QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus, 
     QSpinBox:focus, QDateEdit:focus, QTextEdit:focus {{
         border: 2px solid {AppConfig.PRIMARY_COLOR};
+    }}
+    
+    QComboBox::drop-down {{
+        border: 0px;
+        width: 30px;
+    }}
+    
+    QComboBox::down-arrow {{
+        image: url({_CHEVRON_DOWN_ICON});
+        width: 16px;
+        height: 16px;
+    }}
+    
+    QDateEdit::drop-down {{
+        border: 0px;
+        width: 30px;
+    }}
+    
+    QDateEdit::down-arrow {{
+        image: url({_CALENDAR_ICON});
+        width: 16px;
+        height: 16px;
     }}
     
     QPushButton {{
@@ -583,12 +634,10 @@ def get_modern_card_style():
         background-color: {AppConfig.CARD_BACKGROUND};
         border: 1px solid {AppConfig.BORDER_COLOR};
         border-radius: {AppConfig.CARD_RADIUS}px;
-        box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
         padding: 20px;
     }}
     
     QFrame.modern-card:hover {{
-        box-shadow: 0px 4px 16px rgba(108, 92, 231, 0.2);
         border-color: {AppConfig.PRIMARY_COLOR};
     }}
     """
@@ -670,4 +719,107 @@ def apply_table_styles(table_widget: QTableWidget):
     # Set header stretch
     header = table_widget.horizontalHeader()
     header.setStretchLastSection(True)
+
+
+def get_page_title_style():
+    """Returns stylesheet for page titles."""
+    return f"""
+    QLabel {{
+        color: {AppConfig.LIGHT_TEXT};
+        font-size: {AppConfig.FONT_SIZE_XXLARGE}pt;
+        font-weight: bold;
+        padding: 5px 0;
+    }}
+    """
+
+
+def get_image_preview_style():
+    """Returns stylesheet for image preview labels."""
+    return f"""
+    QLabel {{
+        border: 2px dashed {AppConfig.BORDER_COLOR};
+        border-radius: 8px;
+        background-color: {AppConfig.INPUT_BACKGROUND};
+    }}
+    """
+
+
+def get_warning_label_style():
+    """Returns stylesheet for warning labels."""
+    return f"""
+    QLabel {{
+        color: {AppConfig.ACCENT_COLOR};
+        font-size: {AppConfig.FONT_SIZE_LARGE}pt;
+        font-weight: bold;
+        padding: 10px;
+    }}
+    """
+
+
+def get_info_label_style():
+    """Returns stylesheet for info/instruction labels."""
+    return f"""
+    QLabel {{
+        color: {AppConfig.TEXT_COLOR};
+        font-size: {AppConfig.FONT_SIZE_MEDIUM}pt;
+        padding: 5px;
+    }}
+    """
+
+
+def get_primary_button_style():
+    """Returns stylesheet for primary action buttons."""
+    return f"""
+    QPushButton {{
+        background-color: {AppConfig.PRIMARY_COLOR};
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: {AppConfig.BUTTON_RADIUS}px;
+        font-size: {AppConfig.FONT_SIZE_MEDIUM}pt;
+        font-weight: 500;
+    }}
+    QPushButton:hover {{
+        background-color: {AppConfig.PRIMARY_HOVER};
+    }}
+    """
+
+
+def get_danger_button_style():
+    """Returns stylesheet for danger/delete buttons."""
+    return f"""
+    QPushButton {{
+        background-color: {AppConfig.ACCENT_COLOR};
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: {AppConfig.BUTTON_RADIUS}px;
+        font-size: {AppConfig.FONT_SIZE_MEDIUM}pt;
+        font-weight: 500;
+    }}
+    QPushButton:hover {{
+        background-color: #c0392b;
+    }}
+    QPushButton:disabled {{
+        background-color: {AppConfig.BORDER_COLOR};
+        color: {AppConfig.TEXT_COLOR_ALT};
+    }}
+    """
+
+
+def get_input_field_style():
+    """Returns stylesheet for input fields with focus state."""
+    return f"""
+    QLineEdit {{
+        background-color: {AppConfig.INPUT_BACKGROUND};
+        border: 2px solid {AppConfig.BORDER_COLOR};
+        border-radius: {AppConfig.INPUT_RADIUS}px;
+        padding: 10px;
+        color: {AppConfig.TEXT_COLOR};
+        font-size: {AppConfig.FONT_SIZE_MEDIUM}pt;
+    }}
+    QLineEdit:focus {{
+        border: 2px solid {AppConfig.ACCENT_COLOR};
+    }}
+    """
 
