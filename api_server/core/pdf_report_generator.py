@@ -15,6 +15,40 @@ from utils.pdf_styles import(
 )
 
 
+def _footer_canvas(canvas, doc):
+    """Draw footer on every page at the bottom"""
+    canvas.saveState()
+    
+    # Calculate footer position (bottom of page)
+    footer_y = doc.bottomMargin - 0.3 * inch
+    
+    # Draw gold divider line
+    canvas.setStrokeColor(PDFColors.GOLD_ACCENT)
+    canvas.setLineWidth(0.5)
+    canvas.line(doc.leftMargin, footer_y + 0.2*inch, 
+                doc.width + doc.leftMargin, footer_y + 0.2*inch)
+    
+    # Generation timestamp
+    timestamp = datetime.now().strftime('%B %d, %Y at %I:%M %p')
+    canvas.setFont('Helvetica', 9)
+    canvas.setFillColor(PDFColors.MEDIUM_GRAY)
+    canvas.drawCentredString(
+        (doc.width + doc.leftMargin + doc.rightMargin) / 2,
+        footer_y,
+        f"Generated on {timestamp}"
+    )
+    
+    # Company footer
+    footer_text = f"{PDFBranding.COMPANY_NAME} | {PDFBranding.BRANCH_NAME}"
+    canvas.drawCentredString(
+        (doc.width + doc.leftMargin + doc.rightMargin) / 2,
+        footer_y - 0.15*inch,
+        footer_text
+    )
+    
+    canvas.restoreState()
+
+
 class PDFReportGenerator:
     """
     Professional PDF report generator for all 7 StockaDoodle reports
@@ -57,19 +91,27 @@ class PDFReportGenerator:
     
     def _add_professional_header(self, elements):
         """Add professional header with logo and company branding"""
-        # Add company logo
-        logo_path = PDFBranding.LOGO_PATH
-        if not os.path.exists(logo_path):
-            logo_path = PDFBranding.LOGO_FALLBACK_PATH
+        # Add company logo - try multiple paths
+        logo_paths = [
+            PDFBranding.LOGO_PATH,
+            PDFBranding.LOGO_FALLBACK_PATH,
+            "../desktop_app/assets/icons/stockadoodle-transparent.png",
+            "../../desktop_app/assets/icons/stockadoodle-transparent.png",
+        ]
         
-        if os.path.exists(logo_path):
-            try:
-                logo = Image(logo_path, width=2*inch, height=2*inch)
-                logo.hAlign = 'CENTER'
-                elements.append(logo)
-                elements.append(PDFLayoutHelpers.create_spacer(0.15))
-            except Exception as e:
-                print(f"Logo loading failed: {e}")
+        logo_added = False
+        for logo_path in logo_paths:
+            if os.path.exists(logo_path):
+                try:
+                    logo = Image(logo_path, width=1.5*inch, height=1.5*inch)
+                    logo.hAlign = 'CENTER'
+                    elements.append(logo)
+                    elements.append(PDFLayoutHelpers.create_spacer(0.1))
+                    logo_added = True
+                    break
+                except Exception as e:
+                    print(f"Logo loading failed from {logo_path}: {e}")
+                    continue
         
         # Company name
         company_para = Paragraph(
@@ -87,7 +129,7 @@ class PDFReportGenerator:
         
         # Gold divider line
         elements.append(PDFLayoutHelpers.create_gold_border_line())
-        elements.append(PDFLayoutHelpers.create_spacer(0.3))
+        elements.append(PDFLayoutHelpers.create_spacer(0.25))
     
     def _add_report_title(self, elements, title, subtitle=None):
         """Add report-specific title section"""
@@ -103,21 +145,9 @@ class PDFReportGenerator:
         elements.append(PDFLayoutHelpers.create_spacer(0.2))
     
     def _add_professional_footer(self, elements):
-        """Add professional footer"""
-        elements.append(PDFLayoutHelpers.create_spacer(0.3))
-        elements.append(PDFLayoutHelpers.create_gold_border_line())
-        
-        # Generation timestamp
-        timestamp = datetime.now().strftime('%B %d, %Y at %I:%M %p')
-        footer1 = Paragraph(f"Generated on {timestamp}", self.styles['footer'])
-        elements.append(footer1)
-        
-        # Company footer
-        footer2 = Paragraph(
-            f"{PDFBranding.COMPANY_NAME} | {PDFBranding.BRANCH_NAME}",
-            self.styles['footer']
-        )
-        elements.append(footer2)
+        """Add professional footer - Note: Footer is now drawn via canvas callback"""
+        # Footer is handled by _footer_canvas callback, so we just add spacing
+        elements.append(PDFLayoutHelpers.create_spacer(0.5))
     
     def _create_summary_box(self, summary_data):
         """Create styled summary metrics box"""
@@ -140,8 +170,8 @@ class PDFReportGenerator:
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer, pagesize=letter, 
-            topMargin=0.75*inch,
-            bottomMargin=0.75*inch,
+            topMargin=0.5*inch,
+            bottomMargin=0.8*inch,  # Increased for footer space
             leftMargin=0.75*inch,
             rightMargin=0.75*inch
             )
@@ -151,7 +181,9 @@ class PDFReportGenerator:
         self._add_professional_header(elements)
         
         # Date range
-        date_range = f"{report_data['date_range']['start']} to {report_data['date_range']['end']}"
+        start_date = report_data.get('date_range', {}).get('start', 'None')
+        end_date = report_data.get('date_range', {}).get('end', 'None')
+        date_range = f"{start_date} to {end_date}" if start_date != 'None' and end_date != 'None' else "None to None"
         
          # Report title
         self._add_report_title(elements, "Sales Performance Report", f"Report Period: {date_range}")
@@ -159,10 +191,11 @@ class PDFReportGenerator:
         # Summary section
         elements.append(Paragraph("Summary", self.styles['section']))
         
+        summary = report_data.get('summary', {})
         summary_data = {
-            'Total Revenue': f"${report_data['summary']['total_income']:,.2f}",
-            'Total Quantity Sold': f"{report_data['summary']['total_quantity_sold']:,}",
-            'Total Transactions': f"{report_data['summary']['total_transactions']:,}"
+            'Total Revenue': f"${summary.get('total_income', 0):,.2f}",
+            'Total Quantity Sold': f"{summary.get('total_quantity_sold', 0):,}",
+            'Total Transactions': f"{summary.get('total_transactions', 0):,}"
         }
         
         summary_table = self._create_summary_box(summary_data)
@@ -170,19 +203,19 @@ class PDFReportGenerator:
         elements.append(PDFLayoutHelpers.create_spacer(0.3))
         
         # Sales details
-        if report_data['sales']:
+        if report_data.get('sales'):
             elements.append(Paragraph("Sales Details", self.styles['section']))
             
             sales_data = [['Sale ID', 'Date', 'Product', 'Qty', 'Price', 'Retailer']]
             
             for sale in report_data['sales'][:50]:  # Limit to 50 for PDF
                 sales_data.append([
-                    str(sale['sale_id']),
-                    sale['date'][:10],
-                    sale['product_name'][:25],
-                    str(sale['quantity_sold']),
-                    f"${sale['total_price']:,.2f}",
-                    sale['retailer_name'][:20]
+                    str(sale.get('sale_id', 'N/A')),
+                    sale.get('date', 'N/A')[:10],
+                    sale.get('product_name', 'N/A')[:25],
+                    str(sale.get('quantity_sold', 0)),
+                    f"${sale.get('total_price', 0):,.2f}",
+                    sale.get('retailer_name', 'N/A')[:20]
                 ])
             
             sales_table = self._create_data_table(
@@ -191,11 +224,11 @@ class PDFReportGenerator:
             )
             elements.append(sales_table)
         
-        # Footer
+        # Footer spacing (actual footer drawn via canvas)
         self._add_professional_footer(elements)
         
-        # Build PDF
-        doc.build(elements)
+        # Build PDF with footer callback
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
     
@@ -205,7 +238,9 @@ class PDFReportGenerator:
     def generate_category_distribution_report(self, report_data):
         """Generate Report 2: Category Distribution Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -239,10 +274,10 @@ class PDFReportGenerator:
         )
         elements.append(cat_table)
         
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
         
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
     
@@ -252,7 +287,9 @@ class PDFReportGenerator:
     def generate_retailer_performance_report(self, report_data):
         """Generate Report 3: Retailer Performance Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -291,10 +328,10 @@ class PDFReportGenerator:
         )
         elements.append(ret_table)
         
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
         
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
     
@@ -304,7 +341,9 @@ class PDFReportGenerator:
     def generate_alerts_report(self, report_data):
         """Generate Report 4: Low-Stock and Expiration Alert Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -345,10 +384,10 @@ class PDFReportGenerator:
         
         elements.append(alert_table)
         
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
         
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
     
@@ -358,7 +397,9 @@ class PDFReportGenerator:
     def generate_managerial_activity_report(self, report_data):
         """Generate Report 5: Managerial Activity Log Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -398,10 +439,10 @@ class PDFReportGenerator:
         )
         elements.append(log_table)
         
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
         
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
     
@@ -409,9 +450,11 @@ class PDFReportGenerator:
     # REPORT 6: Detailed Sales Transaction Report
     # ================================================================
     def generate_transactions_report(self, report_data):
-        """Generate Report 6: Detailed Sales Transaction Report (same as Report 1)"""
+        """Generate Report 6: Detailed Sales Transaction Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -462,11 +505,11 @@ class PDFReportGenerator:
         )
         elements.append(sales_table)
 
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
 
-        # Build the PDF document
-        doc.build(elements)
+        # Build the PDF document with footer callback
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
             
@@ -477,7 +520,9 @@ class PDFReportGenerator:
     def generate_user_accounts_report(self, report_data):
         """Generate Report 7: User Accounts Report"""
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+        doc = SimpleDocTemplate(buffer, pagesize=letter, 
+                                topMargin=0.5*inch, bottomMargin=0.8*inch,
+                                leftMargin=0.75*inch, rightMargin=0.75*inch)
         elements = []
         
         # Header
@@ -517,9 +562,9 @@ class PDFReportGenerator:
         )
         elements.append(user_table)
         
-        # Footer
+        # Footer spacing
         self._add_professional_footer(elements)
         
-        doc.build(elements)
+        doc.build(elements, onFirstPage=_footer_canvas, onLaterPages=_footer_canvas)
         buffer.seek(0)
         return buffer
