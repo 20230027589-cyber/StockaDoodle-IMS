@@ -167,14 +167,18 @@ class StockaDoodleAPI:
         return self._request("GET", f"/categories/{category_id}", params=params)  
       
     def create_category(self, name: str, description: Optional[str] = None,   
-                       category_image: Optional[bytes] = None) -> Dict:  
+                       category_image: Optional[bytes] = None,
+                       image_base64: Optional[str] = None) -> Dict:  
         """Create new category"""  
         data = {  
             "name": name,  
             "description": description  
         }  
           
-        if category_image:  
+        # Accept image_base64 as string directly (preferred) or convert from bytes
+        if image_base64:
+            data['image_base64'] = image_base64
+        elif category_image:  
             import base64  
             data['image_base64'] = base64.b64encode(category_image).decode('utf-8')  
           
@@ -222,7 +226,8 @@ class StockaDoodleAPI:
       
     def create_product(self, name: str, price: int, brand: Optional[str] = None,  
                       category_id: Optional[int] = None, min_stock_level: int = 10,  
-                      details: Optional[str] = None, product_image: Optional[bytes] = None,  
+                      details: Optional[str] = None, product_image: Optional[bytes] = None,
+                      image_base64: Optional[str] = None,  # Accept base64 string directly
                       stock_level: Optional[int] = None, expiration_date: Optional[str] = None,  
                       added_by: Optional[int] = None) -> Dict:  
         """Create new product"""  
@@ -241,7 +246,10 @@ class StockaDoodleAPI:
         # Remove None values  
         data = {k: v for k, v in data.items() if v is not None}  
           
-        if product_image:  
+        # Accept image_base64 as string directly (preferred) or convert from bytes
+        if image_base64:
+            data['image_base64'] = image_base64
+        elif product_image:  
             import base64  
             data['image_base64'] = base64.b64encode(product_image).decode('utf-8')  
           
@@ -290,6 +298,37 @@ class StockaDoodleAPI:
         }  
         return self._request("POST", f"/log/dispose", json=data)  
       
+    def update_stock_batch(self, product_id: int, batch_id: int, 
+                          expiration_date: Optional[str] = None,
+                          reason: Optional[str] = None) -> Dict:
+        """Update stock batch metadata (expiration date and reason)"""
+        data = {}
+        if expiration_date:
+            data['expiration_date'] = expiration_date
+        if reason:
+            data['reason'] = reason
+        
+        return self._request("PATCH", f"/products/{product_id}/stock_batches/{batch_id}", json=data)
+    
+    def dispose_stock_batch(self, batch_id: int, quantity: int, reason: str,
+                           product_id: Optional[int] = None,
+                           user_id: Optional[int] = None) -> Dict:
+        """Dispose stock from a specific batch"""
+        data = {
+            "quantity": quantity,
+            "reason": reason,
+            "user_id": user_id or (self.current_user['id'] if self.current_user else None)
+        }
+        # Try batch-specific endpoint first
+        try:
+            return self._request("POST", f"/stock/batches/{batch_id}/dispose", json=data)
+        except:
+            # Fallback to product-level dispose if batch-specific doesn't exist
+            if product_id:
+                return self.dispose_product(product_id, quantity, reason, user_id)
+            else:
+                raise Exception("Batch dispose endpoint not available and product_id not provided")
+    
     def delete_stock_batch(self, product_id: int, batch_id: int,  
                           user_id: Optional[int] = None) -> Dict:  
         """Delete stock batch"""  
@@ -460,11 +499,11 @@ class StockaDoodleAPI:
         Returns:
             bytes: PDF file content
         """
-        url = self._url(f'reports/{report_type}/pdf')
-        response = requests.get(url, params=params, timeout=self.timeout)
+        url = f"{self.base_url}/reports/{report_type}/pdf"
+        response = self.session.get(url, params=params, timeout=30)
         
         if response.status_code != 200:
-            raise StockaDoodleAPIError(f"Failed to download PDF: {response.status_code}")
+            raise Exception(f"Failed to download PDF: {response.status_code}")
         
         return response.content
     
