@@ -14,22 +14,23 @@ def parse_date(value):
     return None
 
 
-def get_image_blob():
+def get_image_blob(field_name: str = "image"):
     """
     Extract image from:
-    - multipart/form-data → file upload (field name: 'image')
-    - JSON or form-data → base64 string (field name: 'image_base64')
+    - multipart/form-data → file upload (field name: field_name)
+    - JSON or form-data → base64 string (field name: field_name+ '_image_base64')
     Returns bytes or None
     """
     # 1. File upload
-    if "image" in request.files and request.files["image"].filename:
-        file = request.files["image"]
+    if field_name in request.files and request.files[field_name].filename:
+        file = request.files[field_name]
         return file.read()
 
     # 2. Base64 from JSON or form
+    base64_key = f"{field_name}_base64"
     raw = (
-        request.form.get("image_base64") or
-        (request.get_json(silent=True) or {}).get("image_base64")
+        request.form.get(base64_key) or
+        (request.get_json(silent=True) or {}).get(base64_key)
     )
     if raw:
         try:

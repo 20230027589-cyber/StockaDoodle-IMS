@@ -65,7 +65,7 @@ def create_user():
     role = data.get('role', 'staff')
     
     # Handle image
-    user_image = get_image_blob()
+    user_image = get_image_blob("user_image")
     
     try:
         user = UserManager.create_user(
@@ -114,7 +114,7 @@ def replace_user(user_id):
         return jsonify({"errors": ["username, full_name, role, and email are required for PUT"]}), 400
     
     # Handle image
-    user_image = get_image_blob()
+    user_image = get_image_blob("user_image")
     if user_image is not None:
         data['user_image'] = user_image
     
@@ -151,7 +151,7 @@ def update_user(user_id):
     data = request.form.to_dict() if is_form else (request.get_json() or {})
     
     # Handle image
-    user_image = get_image_blob()
+    user_image = get_image_blob("user_image")
     if user_image is not None:
         data['user_image'] = user_image
     
@@ -260,17 +260,22 @@ def send_mfa():
     data = request.get_json() or {}
     
     username = data.get('username')
-    email = data.get('email')
     
     if not username:
-        return jsonify({"errors": ["username"]}), 400
+        return jsonify({"errors": ["username is required"]}), 400
     
+    # Get user from database to get their actual email
     user = UserManager.get_user_by_username(username)
     if not user:
         return jsonify({"errors": ["User not found"]}), 404
     
+    # Use the user's email from database, not from request
+    user_email = user.email
+    if not user_email:
+        return jsonify({"errors": ["User email not found in database"]}), 400
+    
     try:
-        MFAService.send_mfa_code(email, username)
+        MFAService.send_mfa_code(user_email, username)
         
         # Log activity
         ActivityLogger.log_api_activity(

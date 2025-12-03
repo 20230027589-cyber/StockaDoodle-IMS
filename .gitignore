@@ -15,3 +15,9 @@ venv/
 api_server/seeds.py
 
 *.db
+
+tests/
+
+references/
+
+*.md

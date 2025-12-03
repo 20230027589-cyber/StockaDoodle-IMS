@@ -60,9 +60,8 @@ def create_category():
         return jsonify({"errors": ["Category name already exists"]}), 400
     
     # Handle image
-    image_blob = get_image_blob()
-    image_base64 = None
-    if image_blob:
+    image_blob = get_image_blob("category_image")
+    if image_base64 is not  None:
         import base64
         image_base64 = base64.b64encode(image_blob).decode('utf-8')
     
@@ -122,9 +121,8 @@ def replace_category(cat_id):
     category.description = data.get('description')
     
     # Handle image
-    new_image = get_image_blob()
-    image_base64 = None
-    if new_image:
+    new_image = get_image_blob("category_image")
+    if image_base64 is not None:
         import base64
         image_base64 = base64.b64encode(new_image).decode('utf-8')
         
@@ -185,7 +183,7 @@ def update_category(cat_id):
         category.description = data['description']
     
     # Handle image
-    new_image = get_image_blob()
+    new_image = get_image_blob("category_image")
     if new_image is not None:
         import base64
         category.category_image = base64.b64encode(new_image).decode('utf-8')

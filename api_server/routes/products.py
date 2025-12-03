@@ -105,7 +105,7 @@ def get_product(id):
     include_batches = request.args.get('include_batches') == 'true'
     
     try:
-        product = Product.objects.get(id=id).first()
+        product = Product.objects.get(id=id)
         # return product data with optional image and batch details
         return jsonify(product.to_dict(include_image, include_batches))
     
@@ -165,14 +165,24 @@ def create_product():
     if price is None:
         return jsonify({"errors": ["Price must be a number"]}), 400
 
-    category_id = None
-    if data.get('category_id'):
-        category_id = extract_int(data['category_id'])
-        if category_id and not Category.objects(id=category_id).first():
-            return jsonify({"errors": ["Invalid category ID"]}), 400
+    # Validate category_id (required)
+    if not data.get('category_id'):
+        return jsonify({"errors": ["category_id is required"]}), 400
+    
+    category_id = extract_int(data['category_id'])
+    if not category_id:
+        return jsonify({"errors": ["category_id must be a valid number"]}), 400
+    
+    if not Category.objects(id=category_id).first():
+        return jsonify({"errors": ["Invalid category ID"]}), 400
 
-    # Handle product image
-    image_blob = get_image_blob()
+    image_blob = get_image_blob("product_image")
+    
+    # Convert image to base64 string for storage
+    image_base64 = None
+    if image_blob:
+        import base64
+        image_base64 = base64.b64encode(image_blob).decode('utf-8')
 
     # Create product
     product = Product(
@@ -181,7 +191,7 @@ def create_product():
         price=price,
         category_id=category_id,
         min_stock_level=extract_int(data.get('min_stock_level'), 10),
-        product_image=image_blob,
+        product_image=image_base64,
         details=data.get('details')
     )
     
@@ -324,7 +334,7 @@ def replace_product(product_id):
     product.name = data['name']
     product.brand = data.get('brand')
     product.price = price
-    product.category = category_id
+    product.category_id = category_id
     product.min_stock_level = extract_int(data.get('min_stock_level'), product.min_stock_level)
     product.details = data.get('details', product.details)
 
@@ -345,10 +355,14 @@ def replace_product(product_id):
         batch.save()
         
     # Image handling
-    new_image = get_image_blob()
+    new_image = get_image_blob("product_image")
+    if new_image is not None:
+        import base64
+        product.product_image = base64.b64encode(new_image).decode('utf-8')
+
     if new_image is not None:
         product.product_image = new_image
-
+        
     product.save()
     
     # Log activity
@@ -384,9 +398,9 @@ def replace_product(product_id):
 # product_image: File (optional)
 # ----------------------------------------------------------------------   
 @bp.route('/<int:id>', methods=['PATCH'])
-def patch_product(product_id):
+def patch_product(id):
     try: 
-        product = Product.objects.get(id=product_id).first()
+        product = Product.objects.get(id=id)
     except DoesNotExist:
         return jsonify({"errors": ["Product not found"]}), 404
     
@@ -434,10 +448,17 @@ def patch_product(product_id):
 
 
     # Image update (replace only if sent)
-    new_image = get_image_blob()
+    new_image = get_image_blob("product_image")
+    
     if new_image is not None:
-        product.product_image = new_image
+        # Convert to base64 string for storage
+        import base64
+        product.product_image = base64.b64encode(new_image).decode('utf-8')
+        changed_fields.append("product image updated")
         
+    if not changed_fields:
+        return jsonify({"message": "No changes"}), 200
+    
     product.save()
     
     changed_fields = [

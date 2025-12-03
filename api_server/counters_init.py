@@ -2,11 +2,11 @@
 One-time script to seed the counters collection.
 """
 
-from pymongo import MongoClient
+from mongoengine import connect, get_db
 from config import Config
 
-client = MongoClient(Config.MONGO_URI)
-db = client[Config.DATABASE_NAME]
+connect(db=Config.DATABASE_NAME, host=Config.MONGO_URI, alias='default')
+db = get_db()
 
 initial_counters = [
     {"_id": "user_id", "seq": 1000},

@@ -24,14 +24,13 @@ class NotificationService:
     SENDER_EMAIL = os.getenv('SENDER_EMAIL', 'alerts@stockadoodle.com')
     
     @staticmethod
-    def send_email(to_email, subject, body):
-        """
-        Send an email notification.
-        
+    def send_email(to_email, subject, body, html_body=None):
+        """        
         Args:
             to_email (str): Recipient email
             subject (str): Email subject
             body (str): Email body (plain text)
+            html_body (str): Optional HTML email body
             
         Returns:
             bool: True if sent successfully
@@ -47,11 +46,18 @@ class NotificationService:
             return True
         
         try:
-            msg = MIMEMultipart()
+            if html_body:
+                msg = MIMEMultipart('alternative')
+            else:
+                msg = MIMEMultipart()
+            
             msg['From'] = NotificationService.SENDER_EMAIL
             msg['To'] = to_email
             msg['Subject'] = subject
             msg.attach(MIMEText(body, 'plain'))
+            
+            if html_body:
+                msg.attach(MIMEText(html_body, 'html'))
             
             server = smtplib.SMTP(NotificationService.SMTP_HOST, NotificationService.SMTP_PORT)
             server.starttls()
@@ -85,11 +91,17 @@ class NotificationService:
         if not managers:
             return {'status': 'no_recipients', 'count': 0}
         
-        # Build alert message
-        subject = f"🚨 Low Stock Alert - {len(low_stock_products)} Products Need Attention"
+        # Build professional HTML email
+        from utils.email_templates import get_low_stock_alert_template
         
+        subject = f"🚨 Low Stock Alert - {len(low_stock_products)} Products Need Attention"
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        
+        html_body = get_low_stock_alert_template(low_stock_products, timestamp)
+        
+        # Plain text fallback
         body = f"""
-Low Stock Alert - {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Low Stock Alert - {timestamp}
 
 The following products are running low on stock:
 
@@ -110,9 +122,8 @@ StockaDoodle Alert System
         # Send to all managers
         sent_count = 0
         for manager in managers:
-            # In production, use manager's email address
             if hasattr(manager, 'email') and manager.email:
-                if NotificationService.send_email(manager.email, subject, body):
+                if NotificationService.send_email(manager.email, subject, body, html_body):
                     sent_count += 1
         
         return {
@@ -154,11 +165,17 @@ StockaDoodle Alert System
                     products_expiring[product.name] = []
                 products_expiring[product.name].append(batch)
         
-        # Build alert message
-        subject = f"⏰ Expiration Alert - {len(products_expiring)} Products Expiring Soon"
+        # Build professional HTML email
+        from utils.email_templates import get_expiration_alert_template
         
+        subject = f"⏰ Expiration Alert - {len(products_expiring)} Products Expiring Soon"
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        
+        html_body = get_expiration_alert_template(products_expiring, expiring_batches, days_ahead, timestamp)
+        
+        # Plain text fallback
         body = f"""
-Expiration Alert - {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Expiration Alert - {timestamp}
 
 The following products have batches expiring within {days_ahead} days:
 
@@ -184,7 +201,7 @@ StockaDoodle Alert System
         sent_count = 0
         for manager in managers:
             if hasattr(manager, 'email') and manager.email:
-                if NotificationService.send_email(manager.email, subject, body):
+                if NotificationService.send_email(manager.email, subject, body, html_body):
                     sent_count += 1
         
         return {
@@ -214,16 +231,23 @@ StockaDoodle Alert System
         if not managers:
             return {'status': 'no_recipients'}
         
+        # Build professional HTML email
+        from utils.email_templates import get_daily_summary_template
+        
+        timestamp = date.today().strftime('%A, %B %d, %Y')
         subject = f"📊 Daily Inventory Summary - {date.today().strftime('%Y-%m-%d')}"
         
+        html_body = get_daily_summary_template(low_stock, expiring, timestamp)
+        
+        # Plain text fallback
         body = f"""
 Daily Inventory Summary
-{date.today().strftime('%A, %B %d, %Y')}
+{timestamp}
 
 """
         if low_stock:
             body += f"🚨 LOW STOCK ALERTS: {len(low_stock)} products\n\n"
-            for product in low_stock[:5]:  # Show top 5
+            for product in low_stock[:5]:
                 body += f"• {product.name}: {product.stock_level}/{product.min_stock_level}\n"
             if len(low_stock) > 5:
                 body += f"  ... and {len(low_stock) - 5} more\n"
@@ -238,7 +262,7 @@ Daily Inventory Summary
                     products_expiring.add(product.name)
 
             body += f"⏰ EXPIRATION ALERTS: {len(products_expiring)} products with expiring batches\n\n"
-            for batch in expiring[:5]:  # Show top 5
+            for batch in expiring[:5]:
                 product = Product.objects(id=batch.product.id if hasattr(batch.product, 'id') else batch.product).first()
                 if product:
                     exp_date = batch.expiration_date
@@ -260,7 +284,7 @@ StockaDoodle Alert System
         sent_count = 0
         for manager in managers:
             if hasattr(manager, 'email') and manager.email:
-                if NotificationService.send_email(manager.email, subject, body):
+                if NotificationService.send_email(manager.email, subject, body, html_body):
                     sent_count += 1
         
         return {

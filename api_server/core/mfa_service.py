@@ -66,14 +66,15 @@ class MFAService:
             'email': email
         }
         
-        # Create email message
+        # Create professional HTML email
+        from utils.email_templates import get_mfa_email_template
+        
         subject = "StockaDoodle - Your MFA Code"
-        body = f"""
+        html_body = get_mfa_email_template(username, code, MFAService.MFA_CODE_EXPIRY_MINUTES)
+        plain_body = f"""
 Hello {username},
 
-Your Multi-Factor Authentication (MFA) code is:
-
-{code}
+Your Multi-Factor Authentication (MFA) code is: {code}
 
 This code will expire in {MFAService.MFA_CODE_EXPIRY_MINUTES} minutes.
 
@@ -86,11 +87,14 @@ StockaDoodle Security Team
         # Send email
         if MFAService.SMTP_USERNAME and MFAService.SMTP_PASSWORD:
             try:
-                msg = MIMEMultipart()
+                msg = MIMEMultipart('alternative')
                 msg['From'] = MFAService.SENDER_EMAIL
                 msg['To'] = email
                 msg['Subject'] = subject
-                msg.attach(MIMEText(body, 'plain'))
+                
+                # Add both plain and HTML versions
+                msg.attach(MIMEText(plain_body, 'plain'))
+                msg.attach(MIMEText(html_body, 'html'))
                 
                 server = smtplib.SMTP(MFAService.SMTP_HOST, MFAService.SMTP_PORT)
                 server.starttls()
