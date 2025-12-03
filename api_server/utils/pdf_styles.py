@@ -11,27 +11,27 @@ from reportlab.lib.units import inch
 
 
 class PDFColors:
-    """Corporate color palette"""
+    """Corporate color palette - Enhanced for better visual appeal"""
     # Primary colors
-    NAVY_DARK = colors.HexColor('#2C3E50')
-    PURPLE_RICH = colors.HexColor('#6C5CE7')
-    GOLD_ACCENT = colors.HexColor('#FDCB6E')
+    NAVY_DARK = colors.HexColor('#1E293B')  # Darker navy for better contrast
+    PURPLE_RICH = colors.HexColor('#6C5CE7')  # Primary brand purple
+    GOLD_ACCENT = colors.HexColor('#FDCB6E')  # Gold accent
     
     # Secondary colors
     WHITE = colors.white
-    LIGHT_GRAY = colors.HexColor('#ECF0F1')
-    MEDIUM_GRAY = colors.HexColor('#95A5A6')
-    DARK_GRAY = colors.HexColor('#34495E')
+    LIGHT_GRAY = colors.HexColor('#F1F5F9')  # Lighter gray for better readability
+    MEDIUM_GRAY = colors.HexColor('#64748B')  # Medium gray for subtitles
+    DARK_GRAY = colors.HexColor('#334155')  # Dark gray for body text
     
     # Status colors
-    SUCCESS_GREEN = colors.HexColor('#00B894')
-    WARNING_ORANGE = colors.HexColor('#FDCB6E')
-    CRITICAL_RED = colors.HexColor('#D63031')
+    SUCCESS_GREEN = colors.HexColor('#10B981')
+    WARNING_ORANGE = colors.HexColor('#F59E0B')
+    CRITICAL_RED = colors.HexColor('#EF4444')
     
     # Table colors
     HEADER_BG = NAVY_DARK
     ROW_ALT_BG = LIGHT_GRAY
-    BORDER_COLOR = MEDIUM_GRAY
+    BORDER_COLOR = colors.HexColor('#CBD5E1')  # Lighter border
 
 
 class PDFStyles:
@@ -39,44 +39,46 @@ class PDFStyles:
     
     @staticmethod
     def get_title_style():
-        """Main report title - large, centered, navy"""
+        """Main report title - large, centered, navy with better spacing"""
         return ParagraphStyle(
             name='ReportTitle',
             fontName='Helvetica-Bold',
-            fontSize=26,
+            fontSize=28,
             textColor=PDFColors.NAVY_DARK,
             alignment=TA_CENTER,
-            spaceAfter=16,
-            spaceBefore=12
+            spaceAfter=12,
+            spaceBefore=8,
+            leading=32
         )
     
     @staticmethod
     def get_subtitle_style():
-        """Report subtitle - medium, centered, purple"""
+        """Report subtitle - medium, centered, purple with better styling"""
         return ParagraphStyle(
             name='ReportSubtitle',
             fontName='Helvetica',
-            fontSize=14,
-            textColor=PDFColors.PURPLE_RICH,
+            fontSize=13,
+            textColor=PDFColors.MEDIUM_GRAY,
             alignment=TA_CENTER,
-            spaceAfter=12,
-            spaceBefore=6
+            spaceAfter=16,
+            spaceBefore=4,
+            leading=16
         )
     
     @staticmethod
     def get_section_header_style():
-        """Section headers - bold, left-aligned"""
+        """Section headers - bold, left-aligned with orange background"""
         return ParagraphStyle(
             name='SectionHeader',
             fontName='Helvetica-Bold',
-            fontSize=16,
+            fontSize=14,
             textColor=PDFColors.NAVY_DARK,
             alignment=TA_LEFT,
-            spaceAfter=10,
-            spaceBefore=20,
-            borderPadding=(0, 0, 4, 0),
-            borderColor=PDFColors.GOLD_ACCENT,
-            borderWidth=2
+            spaceAfter=12,
+            spaceBefore=16,
+            backColor=PDFColors.GOLD_ACCENT,
+            borderPadding=(8, 4, 8, 4),
+            leading=18
         )
     
     @staticmethod
@@ -166,23 +168,25 @@ class PDFTableStyles:
     
     @staticmethod
     def get_summary_table_style():
-        """Summary metrics table style"""
+        """Summary metrics table style - cleaner design"""
         from reportlab.platypus import TableStyle
         
         return TableStyle([
-            ('BACKGROUND', (0, 0), (-1, -1), PDFColors.LIGHT_GRAY),
+            ('BACKGROUND', (0, 0), (-1, -1), PDFColors.WHITE),
             ('TEXTCOLOR', (0, 0), (-1, -1), PDFColors.DARK_GRAY),
             ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (1, 0), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, -1), 11),
+            ('FONTNAME', (1, 0), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (0, -1), 11),
+            ('FONTSIZE', (1, 0), (-1, -1), 12),
             ('ALIGN', (0, 0), (0, -1), 'LEFT'),
             ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-            ('LEFTPADDING', (0, 0), (-1, -1), 15),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-            ('GRID', (0, 0), (-1, -1), 1, PDFColors.WHITE),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('LEFTPADDING', (0, 0), (-1, -1), 12),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, PDFColors.BORDER_COLOR),
+            ('LINEBELOW', (0, 0), (-1, 0), 2, PDFColors.GOLD_ACCENT),
         ])
 
 
@@ -224,4 +228,4 @@ class PDFBranding:
     COMPANY_NAME = "StockaDoodle Inventory Management System"
     BRANCH_NAME = "QuickMart – Quezon Branch"
     LOGO_PATH = "desktop_app/assets/icons/stockadoodle-transparent.png"
-    LOGO_FALLBACK_PATH  = "desktop_app/assets/icons/stockadoodle.png"
+    LOGO_FALLBACK_PATH  = "desktop_app/assets/icons/stockadoodle-white.ico"
